@@ -139,6 +139,7 @@ def main():
     
     model = VQVAE(config, device)
     model.to(device)
+    # next(model.parameters()).is_cuda
 
     optimizer = torch.optim.Adam(
         model.parameters(), 
