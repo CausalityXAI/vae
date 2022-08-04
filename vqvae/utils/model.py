@@ -133,13 +133,14 @@ class VQVAE(nn.Module):
 
         modules.append(nn.LeakyReLU())
 
-        hidden_dims.reverse()
+        # hidden_dims.reverse()
+        hidden_dims_reversed = list(reversed(hidden_dims))
 
-        for i in range(len(hidden_dims) - 1):
+        for i in range(len(hidden_dims_reversed) - 1):
             modules.append(
                 nn.Sequential(
-                    nn.ConvTranspose2d(hidden_dims[i],
-                                       hidden_dims[i + 1],
+                    nn.ConvTranspose2d(hidden_dims_reversed[i],
+                                       hidden_dims_reversed[i + 1],
                                        kernel_size=4,
                                        stride=2,
                                        padding=1),
@@ -148,7 +149,7 @@ class VQVAE(nn.Module):
 
         modules.append(
             nn.Sequential(
-                nn.ConvTranspose2d(hidden_dims[-1],
+                nn.ConvTranspose2d(hidden_dims_reversed[-1],
                                    out_channels=3,
                                    kernel_size=4,
                                    stride=2, padding=1),

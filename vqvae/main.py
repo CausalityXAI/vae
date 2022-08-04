@@ -52,7 +52,7 @@ def get_args(debug):
     
     parser.add_argument("--num_embeddings", default=256, type=int,
                         help="the size of the discrete latent space(K)")
-    parser.add_argument("--embedding_dim", default=32, type=int,
+    parser.add_argument("--embedding_dim", default=64, type=int,
                         help="the dimensionality of the discrete latent space")
     
     parser.add_argument('--epochs', default=10, type=int,
@@ -137,7 +137,7 @@ def main():
                                             shuffle=True, num_workers=0, pin_memory=True)
     classes = ('plane', 'car', 'bird', 'cat', 'deer', 'dog', 'frog', 'horse', 'ship', 'truck')
     
-    model = VQVAE(config, device)
+    model = VQVAE(config, device, hidden_dims=[128, 256])
     model.to(device)
     # next(model.parameters()).is_cuda
 
@@ -187,10 +187,10 @@ def main():
     wandb.log_artifact(artifact)
     
     # """model load"""
-    # artifact = wandb.use_artifact('anseunghwan/(causal)VAE/model:v16', type='model')
+    # artifact = wandb.use_artifact('anseunghwan/VAE/model:v0', type='model')
     # model_dir = artifact.download()
-    # model = VAE(config, device)
-    # model.load_state_dict(torch.load(model_dir + '/model.pth'))
+    # model_ = VQVAE(config, device, hidden_dims=[128, 256])
+    # model_.load_state_dict(torch.load(model_dir + '/model.pth'))
     
     wandb.run.finish()
 #%%

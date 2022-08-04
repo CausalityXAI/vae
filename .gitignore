@@ -21,3 +21,5 @@ shotvae/result_.py
 data
 wandb
 wandb_api.txt
+artifacts
+*.pth
