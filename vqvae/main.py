@@ -113,7 +113,6 @@ def train(trainloader, model, config, optimizer, device):
     return logs, xhat
 #%%
 def main():
-    # freeze_support()
     config = vars(get_args(debug=True)) # default configuration
     config["cuda"] = torch.cuda.is_available()
     device = torch.device('cuda:0') if torch.cuda.is_available() else torch.device('cpu')
@@ -163,8 +162,8 @@ def main():
             plt.figure(figsize=(4, 4))
             for i in range(9):
                 plt.subplot(3, 3, i+1)
-                # plt.imshow(xhat[i].permute((1, 2, 0)).detach().numpy())
-                plt.imshow((xhat[i].cpu().detach().numpy() + 1) / 2)
+                plt.imshow((xhat[i].cpu().permute((1, 2, 0)).detach().numpy() + 1) / 2)
+                # plt.imshow((xhat[i].cpu().detach().numpy() + 1) / 2)
                 plt.axis('off')
             plt.savefig('./assets/tmp_image_{}.png'.format(epoch))
             plt.close()
@@ -173,8 +172,8 @@ def main():
     fig = plt.figure(figsize=(4, 4))
     for i in range(9):
         plt.subplot(3, 3, i+1)
-        # plt.imshow(xhat[i].permute((1, 2, 0)).detach().numpy())
-        plt.imshow((xhat[i].cpu().detach().numpy() + 1) / 2)
+        plt.imshow((xhat[i].cpu().permute((1, 2, 0)).detach().numpy() + 1) / 2)
+        # plt.imshow((xhat[i].cpu().detach().numpy() + 1) / 2)
         plt.axis('off')
     plt.savefig('./assets/image.png')
     plt.close()
