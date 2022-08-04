@@ -10,7 +10,7 @@ parameters:
   epochs:
     values: [50]
   lr:
-    values: [0.005]
+    values: [0.001]
   num_embeddings:
     values: [256, 512]
   embedding_dim:
