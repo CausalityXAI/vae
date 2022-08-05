@@ -6,7 +6,7 @@ This repository is unofficial implementation of following papers with Tensorflow
   - [beta-VAE: Learning Basic Visual Concepts with a Constrained Variational Framework](https://openreview.net/forum?id=Sy2fzU9gl) (`betavae`)
 
 - Representation:
-  - 
+  - [Neural discrete representation learning](https://proceedings.neurips.cc/paper/2017/file/7a98af17e63a0ac09ce2e96d03992fbc-Paper.pdf) (`vqvae`)
 
 - Semi-Supervised:
   - [Semi-supervised Learning with Deep Generative Models](https://proceedings.neurips.cc/paper/2014/hash/d523773c6b194f37b938d340d5d02232-Abstract.html) (`dgm`)
@@ -18,9 +18,8 @@ This repository is unofficial implementation of following papers with Tensorflow
 ## Package Dependencies
 
 ```setup
-python==3.7
-numpy==1.19.5
 tensorflow==2.4.0
+pytorch==1.12.0
 ```
 Additional package requirements for this repository are described in `requirements.txt`.
 
@@ -55,4 +54,4 @@ The number in parenthesis next to the name of model is the number of parameters 
 - https://github.com/wohlert/semi-supervised-pytorch
 - https://github.com/sinahmr/parted-vae
 - https://github.com/FengHZ/AAAI2021-260
-- 
+- https://github.com/AntixK/PyTorch-VAE/blob/master/models/vq_vae.py
