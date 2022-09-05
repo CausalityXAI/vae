@@ -226,10 +226,11 @@ class BigJointDiscriminator(nn.Module):
         self.discriminator_j = Discriminator_MLP(conv_dim * 16 + fc_size, fc_size)
 
     def forward(self, x, z):
-        sx, feature_x = self.discriminator(x)
+        """FIXME"""
+        sx, feature_x = self.discriminator(x) 
         sz, feature_z = self.discriminator_z(z)
         sxz, _ = self.discriminator_j(torch.cat((feature_x, feature_z), dim=1))
-        return (sx + sz + sxz) / 3
+        return (sx.view(-1, 1) + sz + sxz) / 3
 #%%
 def reparameterize(mu, sigma, std=1):
     assert mu.shape == sigma.shape

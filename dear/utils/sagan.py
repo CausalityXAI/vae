@@ -341,8 +341,7 @@ class DisFinalBlock(nn.Module):
         y = self.conv_3(y)
 
         return y
-
-
+#%%
 class SNResMLPBlock(nn.Module):
 
     def __init__(self, channels):
