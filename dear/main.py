@@ -391,10 +391,10 @@ def train(epoch, model, discriminator, encoder_optimizer, decoder_optimizer, D_o
                 loss_d.item(), loss_encoder.item(), loss_decoder.item(), sup_loss.item(),
                 encoder_score.mean().item(), decoder_score.mean().item()))
             print(log)
-            wandb.log({"loss(Discriminator)": loss_d.item()})
-            wandb.log({"loss(Encoder)": loss_encoder.item()})
-            wandb.log({"loss(Decoder)": loss_decoder.item()})
-            wandb.log({"loss(Sup)": sup_loss.item()})
+            wandb.log({"loss(Discriminator)": loss_d.item(),
+                       "loss(Encoder)": loss_encoder.item(),
+                       "loss(Decoder)": loss_decoder.item(),
+                       "loss(Sup)": sup_loss.item()})
 
         if (epoch == 1 or epoch % args["sample_every_epoch"] == 0) and batch_idx == len(train_loader) - 1:
             test(epoch, batch_idx + 1, model, x[:args["save_n_recons"]], save_dir)
