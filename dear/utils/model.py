@@ -1,4 +1,9 @@
 #%%
+"""
+Reference:
+[1]: https://github.com/xwshen51/DEAR/blob/main/causal_model.py
+"""
+#%%
 import torchvision.models as models
 import torch.nn.init as init
 
