@@ -280,6 +280,9 @@ def main():
     
     wandb.run.finish()
 #%%
+# i = 0
+# epoch, model, discriminator, encoder_optimizer, decoder_optimizer, D_optimizer, train_loader, label_idx, print_every, save_dir, prior_optimizer, A_optimizer = \
+#     i, model, discriminator, encoder_optimizer, decoder_optimizer, D_optimizer, train_loader, label_idx, args["print_every"], save_dir, prior_optimizer, A_optimizer
 def train(epoch, model, discriminator, encoder_optimizer, decoder_optimizer, D_optimizer, train_loader, 
           label_idx, print_every, save_dir, prior_optimizer, A_optimizer):
     
@@ -296,6 +299,8 @@ def train(epoch, model, discriminator, encoder_optimizer, decoder_optimizer, D_o
         
         num_labels = len(label_idx)
         label = label.to(device)
+        
+        # with torch.autograd.set_detect_anomaly(True):
 
         """================== TRAIN DISCRIMINATOR =================="""
         for _ in range(args["d_steps_per_iter"]):
@@ -361,22 +366,20 @@ def train(epoch, model, discriminator, encoder_optimizer, decoder_optimizer, D_o
                 sup_loss = torch.zeros([1], device=device)
             loss_encoder = loss_encoder + sup_loss * args["sup_coef"]
 
-            loss_encoder.backward()
-            encoder_optimizer.step()
-            if 'scm' in args["prior"]:
-                prior_optimizer.step()
-            
             """2. train generator"""
-            model.zero_grad()
-
             decoder_score = discriminator(x_fake, z)
             # with scaling clipping for stabilization
             r_decoder = torch.exp(decoder_score.detach())
             s_decoder = r_decoder.clamp(0.5, 2)
             loss_decoder = -(s_decoder * decoder_score).mean()
-
-            loss_decoder.backward()
+            
+            loss = loss_encoder + loss_decoder
+            loss.backward()
+            
+            encoder_optimizer.step()
             decoder_optimizer.step()
+            # if 'scm' in args["prior"]:
+            #     prior_optimizer.step()
             
             if 'scm' in args["prior"]:
                 model.prior.set_zero_grad()
