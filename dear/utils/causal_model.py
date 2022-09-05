@@ -1,10 +1,19 @@
 #%%
+"""
+Reference:
+[1]: https://github.com/xwshen51/DEAR/blob/main/causal_model.py
+"""
+#%%
 import torch
 from torch import nn
 import numpy as np
 #%%
 class InvertiblePriorLinear(nn.Module):
-    """docstring for InvertiblePrior"""
+    """Invertible Prior for Linear case
+
+    Parameter:
+        p: mean and std parameter for scaling
+    """
     def __init__(self):
         super(InvertiblePriorLinear, self).__init__()
         self.p = nn.Parameter(torch.rand([2]))
@@ -12,26 +21,42 @@ class InvertiblePriorLinear(nn.Module):
     def forward(self, eps):
         o = self.p[0] * eps + self.p[1]
         return o
+    
     def inverse(self, o):
-        eps = (o - self.p[1])/self.p[0]
+        eps = (o - self.p[1]) / self.p[0]
         return eps
-
+#%%
+# torch.manual_seed(0)
+# eps_in = torch.randn(10, 1)
+# ipl = InvertiblePriorLinear()
+# eps_out = ipl(eps_in)
+# eps_in_ = ipl.inverse(eps_out)
+# assert (eps_in - eps_in_).abs().sum() < 1e-6
+#%%
 class InvertiblePWL(nn.Module):
-    """docstring for InvertiblePrior"""
-    def __init__(self, vmin = -5, vmax = 5, n=100, use_bias = True):
+    """_summary_
+
+    Args:
+        nn (_type_): _description_
+    """
+    def __init__(self, vmin=-5, vmax=5, n=100, use_bias=True):
         super(InvertiblePWL, self).__init__()
-        self.p = nn.Parameter(torch.randn([n+1])/5)
-        self.int_length = (vmax-vmin)/(n-1)
         
+        self.int_length = (vmax - vmin) / (n - 1)
+        self.vmin = vmin
+        self.vmax = vmax
         self.n = n
         if use_bias:
-            self.b = nn.Parameter(torch.randn([1])+vmin)
+            self.b = nn.Parameter(torch.randn([1]) + vmin)
         else:
             self.b = vmin
-        self.points = nn.Parameter(torch.from_numpy(np.linspace(vmin,vmax,n).astype('float32')).view(1,n),
-                                   requires_grad = False)
-    def to_positive(self,x):
-        return torch.exp(x)+1e-3
+        self.points = nn.Parameter(torch.from_numpy(
+            np.linspace(vmin, vmax, n).astype('float32')).view(1, n),
+            requires_grad = False)
+        self.p = nn.Parameter(torch.randn([n + 1]) / 5)
+        
+    def to_positive(self, x):
+        return torch.exp(x) + 1e-3
 
     def forward(self, eps):
         delta_h = self.int_length * self.to_positive(self.p[1:self.n]).detach()
@@ -40,50 +65,84 @@ class InvertiblePWL(nn.Module):
         delta_bias[0] = self.b
         for i in range(self.n-1):
             delta_bias[i+1] = delta_bias[i] + delta_h[i]
-        index = torch.sum(((eps-self.points)>=0).long(),1).detach() # b * 1 from 0 to n
-        
-        start_points = index-1
-        start_points[start_points<0] = 0
+            
+        index = torch.sum(((eps - self.points) >= 0).long(), 1).detach() 
+        start_points = index - 1 # where indicator becomes 1 (index)
+        start_points[start_points < 0] = 0 # smaller than boundary, set to zero 
         delta_bias = delta_bias[start_points]
-        start_points = torch.squeeze(self.points)[torch.squeeze(start_points)].detach()
-        delta_x = eps - start_points.view(-1,1)
         
-        k = self.to_positive(self.p[index])
-        delta_fx = delta_x*k.view(-1,1)
+        start_points = torch.squeeze(self.points)[torch.squeeze(start_points)].detach() # points where indicator becomes 1
         
-        o = delta_fx+delta_bias.view(-1,1)
+        # weight term
+        w = self.to_positive(self.p[index])
         
-        return o
+        out = (eps - start_points.view(-1,1)) * w.view(-1,1) + delta_bias.view(-1,1)
+        return out
 
-    def inverse(self, o):
+    def inverse(self, out):
         delta_h = self.int_length * self.to_positive(self.p[1:self.n]).detach()
-        delta_bias = torch.zeros([self.n]).to(o.device)
+        delta_bias = torch.zeros([self.n]).to(out.device)
+        
         delta_bias[0] = self.b
         for i in range(self.n-1):
             delta_bias[i+1] = delta_bias[i] + delta_h[i]
-        index = torch.sum(((o-delta_bias)>=0).long(),1).detach() # b * 1 from 0 to n
-        start_points = index-1
-        start_points[start_points<0] = 0
+            
+        index = torch.sum(((out - delta_bias) >= 0).long(), 1).detach() 
+        start_points = index - 1
+        start_points[start_points < 0] = 0
         delta_bias = delta_bias[start_points]
-        intervel_incre = o - delta_bias.view(-1,1)
+        
         start_points = torch.squeeze(self.points)[torch.squeeze(start_points)].detach()
-        k = self.to_positive(self.p[index])
-        delta_x = intervel_incre/k.view(-1,1)
-        eps = delta_x + start_points.view(-1,1)
+        
+        w = self.to_positive(self.p[index])
+        
+        eps = (out - delta_bias.view(-1,1)) / w.view(-1,1) + start_points.view(-1,1)
         return eps
 #%%
+# torch.manual_seed(0)
+# eps_in = torch.randn(10, 1)
+# ipl = InvertiblePWL()
+# eps_out = ipl(eps_in)
+# eps_in_ = ipl.inverse(eps_out)
+# assert (eps_in - eps_in_).abs().sum() < 1e-6
+#%%
+# visualization
+# import matplotlib.pyplot as plt
+# fig = plt.figure(figsize=(7, 4))
+# torch.manual_seed(0)
+# np.random.seed(0)
+# ipl = InvertiblePWL(vmin=-1, vmax=1, n=5)
+# ipl.p.data = torch.from_numpy(np.random.uniform(-4, 4, size=ipl.n + 1))
+# eps_in = torch.from_numpy(np.linspace(ipl.vmin - 1, ipl.vmax + 1, 10000)[:, None])
+# eps_out = ipl(eps_in)
+# plt.plot(eps_in.detach().numpy()[:, 0],
+#          eps_out.detach().numpy()[:, 0])
+# for x in ipl.points.numpy()[0, :]:
+#     plt.axvline(x, color='black', linestyle='--') 
+#%%
 class InvertiblePriorInv(nn.Module):
-    """docstring for InvertiblePrior"""
+    """_summary_
+
+    Args:
+        nn (_type_): _description_
+    """
     def __init__(self,prior):
         super(InvertiblePriorInv, self).__init__()
         self.prior = prior
+        
     def forward(self, o):
         return self.prior.inverse(o)
+    
     def inverse(self, eps):
         return self.prior(eps)
 #%%
 class SCM(nn.Module):
-    def __init__(self, d, A=None, scm_type='mlp'):
+    """_summary_
+
+    Args:
+        nn (_type_): _description_
+    """
+    def __init__(self, d, A=None, scm_type='nlrscm'):
         super().__init__()
         self.d = d
         self.A_given = A
@@ -101,8 +160,8 @@ class SCM(nn.Module):
             raise NotImplementedError("Not supported prior network.")
 
         for i in range(d):
-            setattr(self, "prior_net%d" % i, prior_net_model())
-            setattr(self, "enc_net%d" % i, prior_net_enc_model(getattr(self, "prior_net%d" % i)))
+            setattr(self, "prior_net%d" % i, prior_net_model()) # forward
+            setattr(self, "enc_net%d" % i, prior_net_enc_model(getattr(self, "prior_net%d" % i))) # inverse
 
     def set_zero_grad(self):
         if self.A_given is None:
@@ -133,7 +192,7 @@ class SCM(nn.Module):
         z = torch.matmul(z, self.A)
         return z
 
-    def inv_cal(self, eps): # (I-A)^{-1}*eps
+    def inv_cal(self, eps): # (I-A)^{-1} @ epsilon
         adj_normalized = torch.inverse(torch.eye(self.A.shape[0], device=self.A.device) - self.A)
         z_pre = torch.matmul(eps, adj_normalized)
         return z_pre
@@ -153,14 +212,22 @@ class SCM(nn.Module):
 
     def forward(self, eps=None, z=None):
         if eps is not None and z is None:
-            # (I-A.t)^{-1}*eps
-            z = self.inv_cal(eps) # n x d
-            # nonlinear transform
+            # (I-A)^{-1} @ epsilon, [n x d]
+            z = self.inv_cal(eps) 
+            # nonlinear transform, [n x d]
             return self.prior_nlr(z)
         else:
-            # f_2^{-1}(z)
+            # f_2^{-1}(z), [n x d]
             z = self.enc_nlr(z)
             # mask z
             z_new = self.mask(z) # new f_2^{-1}(z) (without noise)
             return z_new, z
+#%%
+# d = 4
+# A = torch.zeros(d, d)
+# A[:2, 2:] = 1
+# scm = SCM(d, A)
+
+# eps = torch.randn(10, d)
+# scm(eps)
 #%%
