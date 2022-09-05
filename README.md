@@ -1,4 +1,4 @@
-# VAE Methods
+# VAE (or GAN) Methods
 
 This repository is unofficial implementation of following papers with Tensorflow 2.0 or pytorch. The corresponding folder name is written in parenthesis.
 
@@ -7,6 +7,7 @@ This repository is unofficial implementation of following papers with Tensorflow
 
 - Representation:
   - [Neural discrete representation learning](https://proceedings.neurips.cc/paper/2017/file/7a98af17e63a0ac09ce2e96d03992fbc-Paper.pdf) (`vqvae`)
+  - [Weakly Supervised Disentangled Generative Causal Representation Learning](https://arxiv.org/abs/2010.02637) (`dear`)
 
 - Semi-Supervised:
   - [Semi-supervised Learning with Deep Generative Models](https://proceedings.neurips.cc/paper/2014/hash/d523773c6b194f37b938d340d5d02232-Abstract.html) (`dgm`)
