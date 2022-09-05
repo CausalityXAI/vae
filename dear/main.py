@@ -26,6 +26,23 @@ from utils.model import *
 from utils.sagan import *
 from utils.causal_model import *
 #%%
+import sys
+import subprocess
+try:
+    import wandb
+except:
+    subprocess.check_call([sys.executable, "-m", "pip", "install", "wandb"])
+    with open("../wandb_api.txt", "r") as f:
+        key = f.readlines()
+    subprocess.run(["wandb", "login"], input=key[0], encoding='utf-8')
+    import wandb
+
+wandb.init(
+    project="(causal)DEAR", 
+    entity="anseunghwan",
+    tags=["fully_supervised"],
+)
+#%%
 import argparse
 def get_args(debug):
     
@@ -105,10 +122,11 @@ def load_config(args):
 #%%
 def main():
     global args
-    args = vars(get_args(debug=True))
+    args = vars(get_args(debug=False))
     if args['dataset'] == 'pendulum':
         args = load_config(args)
-
+    wandb.config.update(args)
+    
     save_dir = './assets/{}/{}_{}_sup{}/'.format(
         args["dataset"], args["labels"], args["prior"], str(args["sup_type"]))
     if not os.path.exists(save_dir): 
@@ -248,14 +266,19 @@ def main():
     fixed_zeros = torch.zeros(1, args["latent_dim"], device=device)
 
     # Train
+    wandb.watch(model, log_freq=100) # tracking gradients
+    wandb.watch(discriminator, log_freq=100) # tracking gradients
+    
     print('Start training...')
     for i in range(args["start_epoch"], args["start_epoch"] + args["n_epochs"]):
         train(i, model, discriminator, encoder_optimizer, decoder_optimizer, D_optimizer, train_loader, 
               label_idx, args["print_every"], save_dir, prior_optimizer, A_optimizer)
-        if i % args["save_model_every"] == 0:
-            torch.save({'model': model.state_dict(), 
-                        'discriminator': discriminator.state_dict()},
-                        save_dir + 'model' + str(i) + '.sav')
+        # if i % args["save_model_every"] == 0:
+        #     torch.save({'model': model.state_dict(), 
+        #                 'discriminator': discriminator.state_dict()},
+        #                 save_dir + 'model' + str(i) + '.sav')
+    
+    wandb.run.finish()
 #%%
 def train(epoch, model, discriminator, encoder_optimizer, decoder_optimizer, D_optimizer, train_loader, 
           label_idx, print_every, save_dir, prior_optimizer, A_optimizer):
@@ -298,7 +321,7 @@ def train(epoch, model, discriminator, encoder_optimizer, decoder_optimizer, D_o
 
             # softplus: log(1 + exp(x)), where x is logit
             # max (1 - label) * log(1 - sigmoid(decoder_score))
-            # + (label) * log(sigmoid(encoder_score))
+            #   + (label) * log(sigmoid(encoder_score))
             loss_d = F.softplus(decoder_score).mean() + F.softplus(-encoder_score).mean()
             
             loss_d.backward()
@@ -340,10 +363,9 @@ def train(epoch, model, discriminator, encoder_optimizer, decoder_optimizer, D_o
 
             loss_encoder.backward()
             encoder_optimizer.step()
-            
             if 'scm' in args["prior"]:
                 prior_optimizer.step()
-
+            
             """2. train generator"""
             model.zero_grad()
 
@@ -360,7 +382,7 @@ def train(epoch, model, discriminator, encoder_optimizer, decoder_optimizer, D_o
                 model.prior.set_zero_grad()
                 A_optimizer.step()
                 prior_optimizer.step()
-
+            
         # Print out losses
         if batch_idx == 0 or (batch_idx + 1) % print_every == 0:
             log = ('Train Epoch: {} ({:.0f}%)\tD loss: {:.4f}, Encoder loss: {:.4f}, Decoder loss: {:.4f}, Sup loss: {:.4f}, '
@@ -369,6 +391,10 @@ def train(epoch, model, discriminator, encoder_optimizer, decoder_optimizer, D_o
                 loss_d.item(), loss_encoder.item(), loss_decoder.item(), sup_loss.item(),
                 encoder_score.mean().item(), decoder_score.mean().item()))
             print(log)
+            wandb.log({"loss(Discriminator)": loss_d.item()})
+            wandb.log({"loss(Encoder)": loss_encoder.item()})
+            wandb.log({"loss(Decoder)": loss_decoder.item()})
+            wandb.log({"loss(Sup)": sup_loss.item()})
 
         if (epoch == 1 or epoch % args["sample_every_epoch"] == 0) and batch_idx == len(train_loader) - 1:
             test(epoch, batch_idx + 1, model, x[:args["save_n_recons"]], save_dir)
@@ -380,7 +406,7 @@ def draw_recon(x, x_recon):
     result[1::2] = x_recon_l
     return torch.FloatTensor(result)
 #%%
-# test_data = x[:args["save_n_recons"]]
+# epoch, i, model, test_data, save_dir = epoch, batch_idx + 1, model, x[:args["save_n_recons"]], save_dir
 def test(epoch, i, model, test_data, save_dir):
     model.eval()
     with torch.no_grad():
@@ -389,17 +415,24 @@ def test(epoch, i, model, test_data, save_dir):
         # Reconstruction
         x_recon = model(x, recon=True)
         recons = draw_recon(x.cpu(), x_recon.cpu())
-        del x_recon
         save_image(recons, save_dir + 'recon_' + str(epoch) + '_' + str(i) + '.png', nrow=args["nrow"],
                    normalize=True, scale_each=True)
+        fig = Image.open(save_dir + 'recon_' + str(epoch) + '_' + str(i) + '.png')
+        wandb.log({'reconstruction': wandb.Image(fig)})
 
         # Generation
         sample = model(z=fixed_noise).cpu()
-        save_image(sample, save_dir + 'gen_' + str(epoch) + '_' + str(i) + '.png', normalize=True, scale_each=True)
+        save_image(sample, save_dir + 'gen_' + str(epoch) + '_' + str(i) + '.png', 
+                   normalize=True, scale_each=True)
+        fig = Image.open(save_dir + 'gen_' + str(epoch) + '_' + str(i) + '.png')
+        wandb.log({'generation': wandb.Image(fig)})
 
         # Traversal (given a fixed traversal range)
         sample = model.traverse(fixed_zeros).cpu()
-        save_image(sample, save_dir + 'trav_' + str(epoch) + '_' + str(i) + '.png', normalize=True, scale_each=True, nrow=10)
+        save_image(sample, save_dir + 'trav_' + str(epoch) + '_' + str(i) + '.png', 
+                   normalize=True, scale_each=True, nrow=10)
+        fig = Image.open(save_dir + 'trav_' + str(epoch) + '_' + str(i) + '.png')
+        wandb.log({'traversal': wandb.Image(fig)})
         del sample
 
     model.train()
