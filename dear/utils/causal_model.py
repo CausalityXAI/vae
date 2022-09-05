@@ -59,9 +59,9 @@ class InvertiblePWL(nn.Module):
         return torch.exp(x) + 1e-3
 
     def forward(self, eps):
+        # bias term
         delta_h = self.int_length * self.to_positive(self.p[1:self.n]).detach()
         delta_bias = torch.zeros([self.n]).to(eps.device)
-                                   
         delta_bias[0] = self.b
         for i in range(self.n-1):
             delta_bias[i+1] = delta_bias[i] + delta_h[i]
@@ -80,9 +80,9 @@ class InvertiblePWL(nn.Module):
         return out
 
     def inverse(self, out):
+        # bias term
         delta_h = self.int_length * self.to_positive(self.p[1:self.n]).detach()
         delta_bias = torch.zeros([self.n]).to(out.device)
-        
         delta_bias[0] = self.b
         for i in range(self.n-1):
             delta_bias[i+1] = delta_bias[i] + delta_h[i]
@@ -94,6 +94,7 @@ class InvertiblePWL(nn.Module):
         
         start_points = torch.squeeze(self.points)[torch.squeeze(start_points)].detach()
         
+        # weight term
         w = self.to_positive(self.p[index])
         
         eps = (out - delta_bias.view(-1,1)) / w.view(-1,1) + start_points.view(-1,1)
