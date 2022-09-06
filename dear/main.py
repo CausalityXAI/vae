@@ -192,19 +192,23 @@ def main():
         
         dataset = CustomDataset(args)
         train_loader = DataLoader(dataset, batch_size=args["batch_size"], shuffle=True)
-        
-    """FIXME"""
+    
+    """FIXME: celeba dataset"""
     # elif args["dataset"] == "celeba": 
-        # train_loader = None
-        # trans_f = transforms.Compose([
-        #     transforms.CenterCrop(128),
-        #     transforms.Resize((args.image_size, args.image_size)),
-        #     transforms.ToTensor(),
-        #     transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
-        # ])
-        # train_set = datasets.CelebA(args["data_dir"], split='train', download=False, transform=trans_f)
-        # train_loader = torch.utils.data.DataLoader(train_set, batch_size=args["batch_size"], shuffle=True, pin_memory=False,
-        #                                             drop_last=True, num_workers=4)
+    #     train_loader = None
+    #     trans_f = transforms.Compose([
+    #         transforms.CenterCrop(128),
+    #         transforms.Resize((args["image_size"], args["image_size"])),
+    #         transforms.ToTensor(),
+    #         transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
+    #     ])
+    #     data_dir = './utils/causal_data/celeba'
+    #     if not os.path.exists(data_dir): 
+    #         os.makedirs(data_dir)
+    #     train_set = datasets.CelebA(data_dir, split='train', download=False, transform=trans_f)
+    #     train_loader = torch.utils.data.DataLoader(train_set, batch_size=args["batch_size"], 
+    #                                                 shuffle=True, pin_memory=False,
+    #                                                 drop_last=True, num_workers=4)
 
     if 'scm' in args["prior"]:
         A = torch.zeros((num_label, num_label))
@@ -275,6 +279,7 @@ def main():
     wandb.watch(discriminator, log_freq=100) # tracking gradients
     
     print('Start training...')
+    # i = 0
     for i in range(args["start_epoch"], args["start_epoch"] + args["n_epochs"]):
         train(i, model, discriminator, encoder_optimizer, decoder_optimizer, D_optimizer, train_loader, 
               label_idx, args["print_every"], save_dir, prior_optimizer, A_optimizer)
@@ -283,9 +288,57 @@ def main():
         #                 'discriminator': discriminator.state_dict()},
         #                 save_dir + 'model' + str(i) + '.sav')
     
+    print('Model saving...')
+    torch.save(model.state_dict(), save_dir + '/model.pth')
+    torch.save(discriminator.state_dict(), save_dir + '/discriminator.pth')
+    artifact = wandb.Artifact('model', type='model', metadata=args) # description=""
+    artifact.add_file(save_dir + '/model.pth')
+    artifact.add_file(save_dir + '/discriminator.pth')
+    artifact.add_file('./main.py')
+    wandb.log_artifact(artifact)
+    
+    # """model load"""
+    # artifact = wandb.use_artifact('anseunghwan/(causal)DEAR/model:v{}'.format(0), type='model')
+    # artifact.metadata
+    # model_dir = artifact.download()
+    # model_ = BGM(
+    #     args["latent_dim"], 
+    #     args["g_conv_dim"], 
+    #     args["image_size"],
+    #     args["enc_dist"], 
+    #     args["enc_arch"], 
+    #     args["enc_fc_size"], 
+    #     args["enc_noise_dim"], 
+    #     args["dec_dist"],
+    #     args["prior"], 
+    #     num_label, 
+    #     A
+    # )
+    # discriminator_ = BigJointDiscriminator(
+    #     args["latent_dim"], 
+    #     args["d_conv_dim"], 
+    #     args["image_size"],
+    #     args["dis_fc_size"]
+    # )
+    # if args["cuda"]:
+    #     model_.load_state_dict(torch.load(model_dir + '/model.pth'))
+    #     discriminator_.load_state_dict(torch.load(model_dir + '/discriminator.pth'))
+    #     model_ = model_.to(device)
+    #     discriminator_ = discriminator_.to(device)
+    # else:
+    #     model_.load_state_dict(torch.load(model_dir + '/model.pth', map_location=torch.device('cpu')))
+    #     discriminator_.load_state_dict(torch.load(model_dir + '/discriminator.pth', map_location=torch.device('cpu')))
+    # # out = model(x, z) 
+    # # out_ = model_(x, z)
+    # # out[-1]
+    # # out_[-1]
+    # # out = discriminator(x, z)
+    # # out_ = discriminator_(x, z)
+    # # out[0]
+    # # out_[0]
+    
     wandb.run.finish()
 #%%
-# i = 0
 # epoch, model, discriminator, encoder_optimizer, decoder_optimizer, D_optimizer, train_loader, label_idx, print_every, save_dir, prior_optimizer, A_optimizer = \
 #     i, model, discriminator, encoder_optimizer, decoder_optimizer, D_optimizer, train_loader, label_idx, args["print_every"], save_dir, prior_optimizer, A_optimizer
 def train(epoch, model, discriminator, encoder_optimizer, decoder_optimizer, D_optimizer, train_loader, 
