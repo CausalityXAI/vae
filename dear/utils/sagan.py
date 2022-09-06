@@ -1,7 +1,7 @@
 #%%
 """
 Reference:
-[1]: https://github.com/xwshen51/DEAR/blob/main/causal_model.py
+[1]: https://github.com/xwshen51/DEAR/blob/main/sagan.py
 """
 #%%
 import numpy as np
