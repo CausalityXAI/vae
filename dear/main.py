@@ -30,6 +30,10 @@ import utils
 from utils.model import *
 from utils.sagan import *
 from utils.causal_model import *
+from utils.viz import (
+    viz_graph,
+    viz_heatmap,
+)
 #%%
 import sys
 import subprocess
@@ -459,6 +463,11 @@ def train(epoch, model, discriminator, encoder_optimizer, decoder_optimizer, D_o
 
         if (epoch == 1 or epoch % args["sample_every_epoch"] == 0) and batch_idx == len(train_loader) - 1:
             test(epoch, batch_idx + 1, model, x[:args["save_n_recons"]], save_dir)
+
+            """estimated causal adjacency matrix"""
+            B_est = model.prior.A.detach().cpu().numpy()
+            fig = viz_heatmap(np.flipud(B_est), size=(7, 7))
+            wandb.log({'B_est': wandb.Image(fig)})
 #%%
 def draw_recon(x, x_recon):
     x_l, x_recon_l = x.tolist(), x_recon.tolist()
