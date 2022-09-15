@@ -192,7 +192,7 @@ def main():
         plt.figure(figsize=(4, 4))
         for i in range(9):
             plt.subplot(3, 3, i+1)
-            plt.imshow((xhat[i].cpu().detach().numpy() + 1) / 2)
+            plt.imshow(xhat[i].squeeze().cpu().detach().numpy(), cmap='gray_r')
             plt.axis('off')
         plt.savefig('./assets/tmp_image_{}.png'.format(epoch))
         plt.close()
@@ -201,7 +201,7 @@ def main():
     fig = plt.figure(figsize=(4, 4))
     for i in range(9):
         plt.subplot(3, 3, i+1)
-        plt.imshow((xhat[i].cpu().detach().numpy() + 1) / 2)
+        plt.imshow(xhat[i].squeeze().cpu().detach().numpy(), cmap='gray_r')
         plt.axis('off')
     plt.savefig('./assets/recon.png')
     plt.close()
@@ -209,13 +209,33 @@ def main():
     
     """model save"""
     torch.save(model.state_dict(), './assets/model.pth')
-    artifact = wandb.Artifact('model_{}'.format('infomax'), 
+    torch.save(discriminator.state_dict(), './assets/discriminator.pth')
+    artifact = wandb.Artifact('InfoMax', 
                               type='model',
                               metadata=config) # description=""
     artifact.add_file('./assets/model.pth')
-    artifact.add_file('./main.py'.format('infomax'))
+    artifact.add_file('./assets/discriminator.pth')
+    artifact.add_file('./main.py')
     artifact.add_file('./utils/model.py')
     wandb.log_artifact(artifact)
+    
+    # """model load"""
+    # artifact = wandb.use_artifact('anseunghwan/VAE/InfoMax:v0', type='model')
+    # model_dir = artifact.download()
+    # model_ = VAE(config["z_dim"], device) 
+    # model_ = model_.to(device)
+    # discriminator_ = Discriminator(config["z_dim"])
+    # discriminator_ = discriminator_.to(device)
+    # model_.load_state_dict(torch.load(model_dir + '/model.pth'))
+    # discriminator_.load_state_dict(torch.load(model_dir + '/discriminator.pth'))
+    # x = torch.randn(1, 1, 28, 28).to(device)
+    # epsilon = torch.randn(1, config["z_dim"]).to(device)
+    # out = model(x)
+    # out_ = model_(x)
+    # out[1] - out_[1]
+    # out = discriminator(x, epsilon)
+    # out_ = discriminator_(x, epsilon)
+    # out - out_
     
     wandb.run.finish()
 #%%
