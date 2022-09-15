@@ -12,17 +12,17 @@ class Discriminator(nn.Module):
         self.z_dim = z_dim
         self.net = nn.Sequential(
             nn.Linear(784 + z_dim, 1000),
-            nn.ReLU(True),
+            nn.ReLU(),
             nn.Linear(1000, 400),
-            nn.ReLU(True),
+            nn.ReLU(),
             nn.Linear(400, 100),
-            nn.ReLU(True),
+            nn.ReLU(),
             nn.Linear(100, 1),
         )
 
     def forward(self, x, z):
         x = x.view(-1, 784)
-        x = torch.cat((x, z), 1)
+        x = torch.cat((x, z), dim=1)
         return self.net(x)
 #%%
 class VAE(nn.Module):
@@ -34,50 +34,50 @@ class VAE(nn.Module):
         
         self.encode = nn.Sequential(
             nn.Linear(784, 1000),
-            nn.ReLU(True),
+            nn.ReLU(),
             nn.Linear(1000, 2000),
-            nn.ReLU(True),
+            nn.ReLU(),
             nn.Linear(2000, 2000),
-            nn.ReLU(True),
+            nn.ReLU(),
             nn.Linear(2000, 1000),
-            nn.ReLU(True),
+            nn.ReLU(),
             nn.Linear(1000, 1000),
-            nn.ReLU(True),
+            nn.ReLU(),
             nn.Linear(1000, 1000),
-            nn.ReLU(True),
+            nn.ReLU(),
             nn.Linear(1000, 1000),
-            nn.ReLU(True),
+            nn.ReLU(),
             nn.Linear(1000, 2 * z_dim),
         )
         
         self.decode = nn.Sequential(
             nn.Linear(z_dim, 1000),
-            nn.ReLU(True),
+            nn.ReLU(),
             nn.Linear(1000, 2000),
-            nn.ReLU(True),
+            nn.ReLU(),
             nn.Linear(2000, 2000),
-            nn.ReLU(True),
+            nn.ReLU(),
             nn.Linear(2000, 2000),
-            nn.ReLU(True),
+            nn.ReLU(),
             nn.Linear(2000, 2000),
-            nn.ReLU(True),
+            nn.ReLU(),
             nn.Linear(2000, 2000),
-            nn.ReLU(True),
+            nn.ReLU(),
             nn.Linear(2000, 2000),
-            nn.ReLU(True),
+            nn.ReLU(),
             nn.Linear(2000, 784),
             nn.Sigmoid(),
         )
 
     def reparametrize(self, mu, logvar):
-        std = logvar.mul(0.5).exp_()
+        std = torch.exp(0.5 * logvar)
         # new(): The type and device of this Tensor match the existing Tensor and have no contents.
         # normal_(): Fills self tensor with elements samples from the normal distribution parameterized by mean and std.
-        eps = std.data.new(std.size()).normal_() 
-        return eps.mul(std).add_(mu) 
+        eps = std.data.new(std.size()).normal_()
+        return mu + eps.mul(std)
     
     def generation(self, x):
-        gen_z = Variable(torch.randn(100, self.z_dim), requires_grad=False)
+        gen_z = Variable(torch.randn(100, self.z_dim), requires_grad=False).to(self.device)
         gen_z = gen_z.to(self.device)
         return self.decode(gen_z).view(x.size())
     

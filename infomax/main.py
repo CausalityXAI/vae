@@ -126,13 +126,11 @@ def train(dataloader, model, discriminator, config, optimizer, optimizer_D, devi
             loss = recon + config["beta"] * KL + config["gamma"] * MI
             loss_.append(('loss', loss))
             
-            # VAE
             optimizer.zero_grad()
-            loss.backward(retain_graph=True)
-            optimizer.step()
-            # Discriminator
             optimizer_D.zero_grad()
+            loss.backward(retain_graph=True)
             MI.backward()
+            optimizer.step()
             optimizer_D.step()
             
         """accumulate losses"""
