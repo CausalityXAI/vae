@@ -51,7 +51,7 @@ def get_args(debug):
     parser.add_argument("--z_dim", default=2, type=int,
                         help="the number of nodes")
     
-    parser.add_argument('--epochs', default=5, type=int,
+    parser.add_argument('--epochs', default=10, type=int,
                         help='maximum iteration')
     parser.add_argument('--batch_size', default=128, type=int,
                         help='batch size')
