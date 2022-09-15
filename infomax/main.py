@@ -58,7 +58,7 @@ def get_args(debug):
     parser.add_argument('--lr', default=0.0001, type=float,
                         help='learning rate')
     parser.add_argument('--lr_D', default=0.00001, type=float,
-                        help='learning rate')
+                        help='learning rate for discriminator')
     
     parser.add_argument('--beta', default=1, type=float,
                         help='observation noise')
