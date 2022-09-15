@@ -81,6 +81,7 @@ def train(dataloader, model, discriminator, config, optimizer, optimizer_D, devi
         'loss': [], 
         'recon': [],
         'KL': [],
+        'MutualInfo': [],
     }
     # for debugging
     for i in range(config["z_dim"]):
@@ -117,6 +118,7 @@ def train(dataloader, model, discriminator, config, optimizer, optimizer_D, devi
             z_perm = permute_dims(z, device)
             D_marginal = discriminator(x_batch, z_perm)
             MI = -(D_joint.mean() - torch.exp(D_marginal - 1).mean())
+            loss_.append(('MutualInfo', MI))
             
             ### posterior variance: for debugging
             logvar_ = logvar.mean(axis=0)
