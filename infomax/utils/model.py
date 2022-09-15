@@ -7,9 +7,10 @@ from torch.autograd import Variable
 import numpy as np
 #%%
 class Discriminator(nn.Module):
-    def __init__(self, z_dim=2):
+    def __init__(self, z_dim=2, device='cpu'):
         super(Discriminator, self).__init__()
         self.z_dim = z_dim
+        self.device = device
         self.net = nn.Sequential(
             nn.Linear(784 + z_dim, 1000),
             nn.ReLU(),
@@ -18,7 +19,7 @@ class Discriminator(nn.Module):
             nn.Linear(400, 100),
             nn.ReLU(),
             nn.Linear(100, 1),
-        )
+        ).to(device)
 
     def forward(self, x, z):
         x = x.view(-1, 784)
