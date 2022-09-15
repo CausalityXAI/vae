@@ -27,3 +27,4 @@ artifacts
 etc
 causal_data
 MNIST
+tmp_image_*

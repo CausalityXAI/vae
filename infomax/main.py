@@ -154,10 +154,10 @@ def main():
 
     """dataset"""
     training_dataset = datasets.MNIST('./assets/MNIST', train=True, download=True, transform=transforms.ToTensor())
-    test_dataset = datasets.MNIST('./assets/MNIST', train=False, download=True, transform=transforms.ToTensor())
+    # test_dataset = datasets.MNIST('./assets/MNIST', train=False, download=True, transform=transforms.ToTensor())
 
     dataloader = DataLoader(training_dataset, batch_size=config["batch_size"], shuffle=True)
-    testloader = DataLoader(test_dataset, batch_size=config["batch_size"], shuffle=True)
+    # testloader = DataLoader(test_dataset, batch_size=config["batch_size"], shuffle=True)
     
     model = VAE(config["z_dim"], device) 
     model = model.to(device)
@@ -174,7 +174,9 @@ def main():
     )
     
     wandb.watch(model, log_freq=1) # tracking gradients
+    wandb.watch(discriminator, log_freq=1) # tracking gradients
     model.train()
+    discriminator.train()
     
     for epoch in range(config["epochs"]):
         logs, xhat = train(dataloader, model, discriminator, config, optimizer, optimizer_D, device)
@@ -186,14 +188,14 @@ def main():
         """update log"""
         wandb.log({x : np.mean(y) for x, y in logs.items()})
             
-        if epoch % 10 == 0:
-            plt.figure(figsize=(4, 4))
-            for i in range(9):
-                plt.subplot(3, 3, i+1)
-                plt.imshow((xhat[i].cpu().detach().numpy() + 1) / 2)
-                plt.axis('off')
-            plt.savefig('./assets/tmp_image_{}.png'.format(epoch))
-            plt.close()
+        # if epoch % 10 == 0:
+        plt.figure(figsize=(4, 4))
+        for i in range(9):
+            plt.subplot(3, 3, i+1)
+            plt.imshow((xhat[i].cpu().detach().numpy() + 1) / 2)
+            plt.axis('off')
+        plt.savefig('./assets/tmp_image_{}.png'.format(epoch))
+        plt.close()
     
     """reconstruction result"""
     fig = plt.figure(figsize=(4, 4))
