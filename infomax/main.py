@@ -173,8 +173,8 @@ def main():
     
     wandb.watch(model, log_freq=1) # tracking gradients
     wandb.watch(discriminator, log_freq=1) # tracking gradients
-    model.train()
-    discriminator.train()
+    print(model.train())
+    print(discriminator.train())
     
     for epoch in range(config["epochs"]):
         logs, xhat = train(dataloader, model, discriminator, config, optimizer, optimizer_D, device)
