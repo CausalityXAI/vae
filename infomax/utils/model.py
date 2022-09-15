@@ -48,7 +48,7 @@ class VAE(nn.Module):
             nn.Linear(1000, 1000),
             nn.ReLU(),
             nn.Linear(1000, 2 * z_dim),
-        )
+        ).to(device)
         
         self.decode = nn.Sequential(
             nn.Linear(z_dim, 1000),
@@ -67,7 +67,7 @@ class VAE(nn.Module):
             nn.ReLU(),
             nn.Linear(2000, 784),
             nn.Sigmoid(),
-        )
+        ).to(device)
 
     def reparametrize(self, mu, logvar):
         std = torch.exp(0.5 * logvar)
