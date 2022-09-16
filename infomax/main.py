@@ -121,9 +121,9 @@ def train(dataloader, model, discriminator, config, optimizer, optimizer_D, devi
             loss_.append(('MutualInfo', MI))
             
             ### posterior variance: for debugging
-            logvar_ = logvar.mean(axis=0)
+            var_ = torch.exp(logvar).mean(axis=0)
             for i in range(config["z_dim"]):
-                loss_.append(('posterior_variance{}'.format(i+1), torch.exp(logvar_[i])))
+                loss_.append(('posterior_variance{}'.format(i+1), var_[i]))
             
             loss = recon + config["beta"] * KL + config["gamma"] * MI
             loss_.append(('loss', loss))
