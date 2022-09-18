@@ -49,7 +49,7 @@ except:
 wandb.init(
     project="(causal)DEAR", 
     entity="anseunghwan",
-    tags=["fully_supervised"],
+    tags=["fully_supervised", "CELEBA"],
 )
 #%%
 import argparse
@@ -59,7 +59,7 @@ def get_args(debug):
 
     # Data settings
     parser.add_argument('--image_size', type=int, default=64)
-    parser.add_argument('--dataset', type=str, default='pendulum', choices=['celeba', 'pendulum'])
+    parser.add_argument('--dataset', type=str, default='celeba', choices=['celeba', 'pendulum'])
 
     # Training settings
     parser.add_argument('--batch_size', type=int, default=128)
@@ -121,7 +121,7 @@ def get_args(debug):
 #%%
 import yaml
 def load_config(args):
-    config_path = "./config/pendulum.yaml"
+    config_path = "./config/{}.yaml".format(args["dataset"])
     with open(config_path, 'r') as config_file:
         config = yaml.load(config_file, Loader=yaml.FullLoader)
     for key in args.keys():
@@ -131,9 +131,8 @@ def load_config(args):
 #%%
 def main():
     global args
-    args = vars(get_args(debug=False))
-    if args['dataset'] == 'pendulum':
-        args = load_config(args)
+    args = vars(get_args(debug=True))
+    args = load_config(args)
     wandb.config.update(args)
     
     save_dir = './assets/{}/{}_{}_sup{}/'.format(
@@ -197,22 +196,21 @@ def main():
         dataset = CustomDataset(args)
         train_loader = DataLoader(dataset, batch_size=args["batch_size"], shuffle=True)
     
-    """FIXME: celeba dataset"""
-    # elif args["dataset"] == "celeba": 
-    #     train_loader = None
-    #     trans_f = transforms.Compose([
-    #         transforms.CenterCrop(128),
-    #         transforms.Resize((args["image_size"], args["image_size"])),
-    #         transforms.ToTensor(),
-    #         transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
-    #     ])
-    #     data_dir = './utils/causal_data/celeba'
-    #     if not os.path.exists(data_dir): 
-    #         os.makedirs(data_dir)
-    #     train_set = datasets.CelebA(data_dir, split='train', download=False, transform=trans_f)
-    #     train_loader = torch.utils.data.DataLoader(train_set, batch_size=args["batch_size"], 
-    #                                                 shuffle=True, pin_memory=False,
-    #                                                 drop_last=True, num_workers=4)
+    elif args["dataset"] == "celeba": 
+        train_loader = None
+        trans_f = transforms.Compose([
+            transforms.CenterCrop(128),
+            transforms.Resize((args["image_size"], args["image_size"])),
+            transforms.ToTensor(),
+            transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
+        ])
+        data_dir = './utils/causal_data/celeba'
+        if not os.path.exists(data_dir): 
+            os.makedirs(data_dir)
+        train_set = datasets.CelebA(data_dir, split='train', download=True, transform=trans_f)
+        train_loader = torch.utils.data.DataLoader(train_set, batch_size=args["batch_size"], 
+                                                    shuffle=True, pin_memory=False,
+                                                    drop_last=True, num_workers=0)
 
     if 'scm' in args["prior"]:
         A = torch.zeros((num_label, num_label))
@@ -293,16 +291,18 @@ def main():
         #                 save_dir + 'model' + str(i) + '.sav')
     
     print('Model saving...')
-    torch.save(model.state_dict(), save_dir + '/model.pth')
-    torch.save(discriminator.state_dict(), save_dir + '/discriminator.pth')
-    artifact = wandb.Artifact('model', type='model', metadata=args) # description=""
-    artifact.add_file(save_dir + '/model.pth')
-    artifact.add_file(save_dir + '/discriminator.pth')
+    torch.save(model.state_dict(), save_dir + '/model_{}.pth'.format(args["dataset"]))
+    torch.save(discriminator.state_dict(), save_dir + '/discriminator_{}.pth'.format(args["dataset"]))
+    artifact = wandb.Artifact('model_{}'.format(args["dataset"]), 
+                              type='model', 
+                              metadata=args) # description=""
+    artifact.add_file(save_dir + '/model_{}.pth'.format(args["dataset"]))
+    artifact.add_file(save_dir + '/discriminator_{}.pth'.format(args["dataset"]))
     artifact.add_file('./main.py')
     wandb.log_artifact(artifact)
     
     # """model load"""
-    # artifact = wandb.use_artifact('anseunghwan/(causal)DEAR/model:v{}'.format(0), type='model')
+    # artifact = wandb.use_artifact('anseunghwan/(causal)DEAR/model_{}:v{}'.format(args["dataset"], 0), type='model')
     # artifact.metadata
     # model_dir = artifact.download()
     # model_ = BGM(
@@ -325,21 +325,23 @@ def main():
     #     args["dis_fc_size"]
     # )
     # if args["cuda"]:
-    #     model_.load_state_dict(torch.load(model_dir + '/model.pth'))
-    #     discriminator_.load_state_dict(torch.load(model_dir + '/discriminator.pth'))
+    #     model_.load_state_dict(torch.load(model_dir + '/model_{}.pth'.format(args["dataset"])))
+    #     discriminator_.load_state_dict(torch.load(model_dir + '/discriminator_{}.pth'.format(args["dataset"])))
     #     model_ = model_.to(device)
     #     discriminator_ = discriminator_.to(device)
     # else:
-    #     model_.load_state_dict(torch.load(model_dir + '/model.pth', map_location=torch.device('cpu')))
-    #     discriminator_.load_state_dict(torch.load(model_dir + '/discriminator.pth', map_location=torch.device('cpu')))
-    # # out = model(x, z) 
-    # # out_ = model_(x, z)
-    # # out[-1]
-    # # out_[-1]
-    # # out = discriminator(x, z)
-    # # out_ = discriminator_(x, z)
-    # # out[0]
-    # # out_[0]
+    #     model_.load_state_dict(torch.load(model_dir + '/model_{}.pth'.format(args["dataset"]), 
+    #                                       map_location=torch.device('cpu')))
+    #     discriminator_.load_state_dict(torch.load(model_dir + '/discriminator_{}.pth'.format(args["dataset"]), 
+    #                                               map_location=torch.device('cpu')))
+    # x = torch.randn(10, 3, args["image_size"], args["image_size"]).to(device)
+    # z = torch.randn(10, args["latent_dim"]).to(device)
+    # out = model(x, z) 
+    # out_ = model_(x, z)
+    # out[-1] - out_[-1]
+    # out = discriminator(x, z)
+    # out_ = discriminator_(x, z)
+    # out[0] - out_[0]
     
     wandb.run.finish()
 #%%
