@@ -1,3 +1,4 @@
+#%%
 #Copyright (C) 2021. Huawei Technologies Co., Ltd. All rights reserved.
 #This program is free software; 
 #you can redistribute it and/or modify
@@ -5,7 +6,7 @@
 #This program is distributed in the hope that it will be useful,
 #but WITHOUT ANY WARRANTY; without even the implied warranty of
 #MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the MIT License for more details.
-
+#%%
 import numpy as np
 import os
 import shutil
@@ -16,11 +17,34 @@ from torch.utils import data
 import torch.utils.data as Data
 from torch.distributions.multivariate_normal import MultivariateNormal
 from PIL import Image
+import random
 
 device = torch.device("cuda:0" if(torch.cuda.is_available()) else "cpu")
 bce = torch.nn.BCEWithLogitsLoss(reduction='none')
 bce3 =  torch.nn.BCELoss(reduction='none')
-
+#%%
+"""for reproducibility"""
+def set_random_seed(seed):
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed(seed)
+    # torch.cuda.manual_seed_all(seed) # if use multi-GPU
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
+    np.random.seed(seed)
+    random.seed(seed)
+    
+    # random.seed(seed)
+    # np.random.seed(seed)
+#%%
+def matrix_poly(matrix, d):
+    x = torch.eye(d).to(device)+ torch.div(matrix.to(device), d).to(device)
+    return torch.matrix_power(x, d)
+    
+def _h_A(A, m):
+    expm_A = matrix_poly(A*A, m)
+    h_A = torch.trace(expm_A) - m
+    return h_A
+#%%
 def mask_threshold(x):
   x = (x+0.5).int().float()
   return x
@@ -62,7 +86,6 @@ def kl_multinormal_cov(qm,qv, pm, pv):
 		torch.trace(torch.inverse(pv[i]))*torch.trace(torch.inverse(qv[i])) + 
 		torch.norm(qm[i])*torch.norm(pv[i], p=1))
 	return KL
- 
  
 def conditional_sample_gaussian(m,v):
 	#64*3*4
@@ -575,3 +598,4 @@ class FixedSeed:
 
 	def __exit__(self, exc_type, exc_value, traceback):
 		np.random.set_state(self.state)
+#%%
