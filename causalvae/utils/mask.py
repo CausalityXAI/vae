@@ -1,3 +1,4 @@
+#%%
 #Copyright (C) 2021. Huawei Technologies Co., Ltd. All rights reserved.
 #This program is free software; 
 #you can redistribute it and/or modify
@@ -5,11 +6,19 @@
 #This program is distributed in the hope that it will be useful,
 #but WITHOUT ANY WARRANTY; without even the implied warranty of
 #MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the MIT License for more details.
+#%%
+"""
+Reference:
+[1]: https://github.com/huawei-noah/trustworthyAI/blob/master/research/CausalVAE/codebase/models/nns/mask.py
+"""
+#%%
+import os
+os.chdir(os.path.dirname(os.path.abspath(__file__)))
 
 import numpy as np
 import torch
 import torch.nn.functional as F
-from codebase import utils as ut
+import util as ut
 from torch import autograd, nn, optim
 from torch import nn
 from torch.nn import functional as F
@@ -18,15 +27,12 @@ device = torch.device("cuda:0" if(torch.cuda.is_available()) else "cpu")
 import numpy as np
 import torch
 import torch.nn.functional as F
-from codebase import utils as ut
 from torch import autograd, nn, optim
 from torch import nn
 from torch.nn import functional as F
 from torch.nn import Linear
 device = torch.device("cuda:0" if(torch.cuda.is_available()) else "cpu")
-
-
-    
+#%%
 def dag_right_linear(input, weight, bias=None):
     if input.dim() == 2 and bias is not None:
         # fused op is marginally faster
@@ -48,11 +54,9 @@ def dag_left_linear(input, weight, bias=None):
             output += bias
         ret = output
     return ret
-
-
-
+#%%
 class MaskLayer(nn.Module):
-	def __init__(self, z_dim, concept=4,z1_dim=4):
+	def __init__(self, z_dim, concept=4, z1_dim=4):
 		super().__init__()
 		self.z_dim = z_dim
 		self.z1_dim = z1_dim
@@ -95,7 +99,7 @@ class MaskLayer(nn.Module):
 		return z
    
 	def mix(self, z):
-		zy = z.view(-1, self.concept*self.z1_dim)
+		zy = z.view(-1, self.concept * self.z1_dim)
 		if self.z1_dim == 1:
 			zy = zy.reshape(zy.size()[0],zy.size()[1],1)
 			if self.concept ==4:
@@ -117,55 +121,9 @@ class MaskLayer(nn.Module):
 			h = torch.cat((rx1,rx2,rx3), dim=1)
 		#print(h.size())
 		return h
-   
-class Mix(nn.Module):
-	def __init__(self, z_dim, concept, z1_dim):
-		super().__init__()
-		self.z_dim = z_dim
-		self.z1_dim = z1_dim
-		self.concept = concept
-		
-		self.elu = nn.ELU()
-		self.net1 = nn.Sequential(
-			nn.Linear(z1_dim , 16),
-			nn.ELU(),
-			nn.Linear(16, z1_dim),
-		)
-		self.net2 = nn.Sequential(
-			nn.Linear(z1_dim , 16),
-			nn.ELU(),
-			nn.Linear(16, z1_dim),
-		)
-		self.net3 = nn.Sequential(
-			nn.Linear(z1_dim , 16),
-			nn.ELU(),
-			nn.Linear(16, z1_dim),
-		)
-		self.net4 = nn.Sequential(
-			nn.Linear(z1_dim , 16),
-			nn.ELU(),
-			nn.Linear(16, z1_dim),
-		)
-
-   
-	def mix(self, z):
-		zy = z.view(-1, self.concept*self.z1_dim)
-		if self.z1_dim == 1:
-			zy = zy.reshape(zy.size()[0],zy.size()[1],1)
-			zy1, zy2, zy3, zy4= zy[:,0],zy[:,1],zy[:,2],zy[:,3]
-		else:
-			zy1, zy2, zy3, zy4 = torch.split(zy, self.z_dim//self.concept, dim = 1)
-		rx1 = self.net1(zy1)
-		rx2 = self.net2(zy2)
-		rx3 = self.net3(zy3)
-		rx4 = self.net4(zy4)
-		h = torch.cat((rx1,rx2,rx3,rx4), dim=1) 
-		#print(h.size())
-		return h
-
-
+#%%
 class CausalLayer(nn.Module):
-	def __init__(self, z_dim, concept=4,z1_dim=4):
+	def __init__(self, z_dim, concept=4, z1_dim=4):
 		super().__init__()
 		self.z_dim = z_dim
 		self.z1_dim = z1_dim
@@ -222,8 +180,7 @@ class CausalLayer(nn.Module):
 		h = torch.cat((rx1,rx2,rx3,rx4), dim=1)
 		#print(h.size())
 		return h,v
-   
-   
+#%%
 class Attention(nn.Module):
   def __init__(self, in_features, bias=False):
     super().__init__()
@@ -239,9 +196,9 @@ class Attention(nn.Module):
     A = torch.softmax(a, dim = 1)
     e = torch.matmul(A,e)
     return e, A
-    
+#%%
 class DagLayer(nn.Linear):
-    def __init__(self, in_features, out_features,i = False, bias=False):
+    def __init__(self, in_features, out_features, i = False, bias=False):
         super(Linear, self).__init__()
         self.in_features = in_features
         self.out_features = out_features
@@ -262,7 +219,7 @@ class DagLayer(nn.Linear):
         self.I = nn.Parameter(torch.eye(out_features))
         self.I.requires_grad=False
         if bias:
-            self.bias = Parameter(torch.Tensor(out_features))
+            self.bias = nn.Parameter(torch.Tensor(out_features))
         else:
             self.register_parameter('bias', None)
             
@@ -330,10 +287,13 @@ class DagLayer(nn.Linear):
             x = x.permute(0,2,1).contiguous()
             v = v.permute(0,2,1).contiguous()
         return x, v
+    
     #def encode_
+    
     def forward(self, x):
         x = x * torch.inverse((self.A)+self.I)
         return x
+    
     def calculate_gaussian(self, x, v):
         print(self.A)
         #x = F.linear(x, torch.inverse((torch.abs(self.A))+self.I), self.bias)
@@ -352,155 +312,21 @@ class DagLayer(nn.Linear):
     def forward(self, x):
         x = x * torch.inverse((self.A)+self.I)
         return x
-      
-class ConvEncoder(nn.Module):
-	def __init__(self, out_dim=None):
-		super().__init__()
-		# init 96*96
-		self.conv1 = torch.nn.Conv2d(3, 32, 4, 2, 1) # 48*48
-		self.conv2 = torch.nn.Conv2d(32, 64, 4, 2, 1, bias=False) # 24*24
-		self.conv3 = torch.nn.Conv2d(64, 1, 4, 2, 1, bias=False)
-		#self.conv4 = torch.nn.Conv2d(128, 1, 1, 1, 0) # 54*44
-   
-		self.LReLU = torch.nn.LeakyReLU(0.2, inplace=True)
-		self.convm = torch.nn.Conv2d(1, 1, 4, 2, 1)
-		self.convv = torch.nn.Conv2d(1, 1, 4, 2, 1)
-		self.mean_layer = nn.Sequential(
-			torch.nn.Linear(8*8, 16)
-			) # 12*12
-		self.var_layer = nn.Sequential(
-			torch.nn.Linear(8*8, 16)
-			)
-		# self.fc1 = torch.nn.Linear(6*6*128, 512)
-		self.conv6 = nn.Sequential(
-			nn.Conv2d(3, 32, 4, 2, 1),
-			nn.ReLU(True),
-			nn.Conv2d(32, 32, 4, 2, 1),
-			nn.ReLU(True),
-			nn.Conv2d(32, 64, 4, 2, 1),
-			nn.ReLU(True),
-			nn.Conv2d(64, 64, 4, 2, 1),
-			nn.ReLU(True),
-			nn.Conv2d(64, 64, 4, 2, 1),
-			nn.ReLU(True),
-			nn.Conv2d(64, 256, 4, 1),
-			nn.ReLU(True),
-			nn.Conv2d(256,128 , 1)
-		)
-
-	def encode(self, x):
-		x = self.LReLU(self.conv1(x))
-		x = self.LReLU(self.conv2(x))
-		x = self.LReLU(self.conv3(x))
-		#x = self.LReLU(self.conv4(x))
-		#print(x.size())
-		hm = self.convm(x)
-		#print(hm.size())
-		hm = hm.view(-1, 8*8)
-		hv = self.convv(x)
-		hv = hv.view(-1, 8*8)
-		mu, var = self.mean_layer(hm), self.var_layer(hv)
-		var = F.softplus(var) + 1e-8
-		#var = torch.reshape(var, [-1, 16, 16])
-		#print(mu.size())
-		return  mu, var
-	def encode_simple(self,x):
-		x = self.conv6(x)
-		m,v = ut.gaussian_parameters(x, dim=1)
-		#print(m.size())
-		return m,v
-class ConvDecoder(nn.Module):
-	def __init__(self, out_dim = None):
-		super().__init__()
-   
-		self.net6 = nn.Sequential(
-				nn.Conv2d(16, 128, 1),
-				nn.LeakyReLU(0.2),
-				nn.ConvTranspose2d(128, 64, 4),
-				nn.LeakyReLU(0.2),
-				nn.ConvTranspose2d(64, 64, 4, 2, 1),
-				nn.LeakyReLU(0.2),
-				nn.ConvTranspose2d(64, 32, 4, 2, 1),
-				nn.LeakyReLU(0.2),
-				nn.ConvTranspose2d(32, 32, 4, 2, 1),
-				nn.LeakyReLU(0.2),
-				nn.ConvTranspose2d(32, 32, 4, 2, 1),
-				nn.LeakyReLU(0.2),
-				nn.ConvTranspose2d(32, 3, 4, 2, 1)
-		)
-   
-	def decode_sep(self,x):
-		return None
-   
-	def decode(self, z):
-		z = z.view(-1, 16, 1, 1)
-		z = self.net6(z)
-		return z
-
-class ConvDec(nn.Module):
-  def __init__(self, out_dim = None):
-    super().__init__()
-    self.concept = 4
-    self.z1_dim = 16
-    self.z_dim = 64
-    self.net1 = ConvDecoder()
-    self.net2 = ConvDecoder()
-    self.net3 = ConvDecoder()
-    self.net4 = ConvDecoder()
-    self.net5 = nn.Sequential(
-			nn.Linear(16, 512),
-  		nn.BatchNorm1d(512),
-  		nn.Linear(512, 1024),
-  		nn.BatchNorm1d(1024)
-     )
-    self.net6 = nn.Sequential(
-  		nn.Conv2d(16, 128, 1),
-      nn.LeakyReLU(0.2),
-      nn.ConvTranspose2d(128, 64, 4),
-      nn.LeakyReLU(0.2),
-      nn.ConvTranspose2d(64, 64, 4, 2, 1),
-      nn.LeakyReLU(0.2),
-      nn.ConvTranspose2d(64, 32, 4, 2, 1),
-      nn.LeakyReLU(0.2),
-      nn.ConvTranspose2d(32, 32, 4, 2, 1),
-      nn.LeakyReLU(0.2),
-      nn.ConvTranspose2d(32, 32, 4, 2, 1),
-      nn.LeakyReLU(0.2),
-      nn.ConvTranspose2d(32, 3, 4, 2, 1)
-		)
-        
-  def decode_sep(self, z, u, y=None):
-    z = z.view(-1, self.concept*self.z1_dim)
-    zy = z if y is None else torch.cat((z, y), dim=1)
-    zy1, zy2, zy3, zy4 = torch.split(zy, self.z_dim//self.concept, dim = 1)
-    rx1 = self.net1.decode(zy1)
-    #print(rx1.size())
-    rx2 = self.net2.decode(zy2)
-    rx3 = self.net3.decode(zy3)
-    rx4 = self.net4.decode(zy4)
-    z = (rx1+rx2+rx3+rx4)/4
-    return z
-    
-  def decode(self, z, u, y=None):
-    z = z.view(-1, self.concept*self.z1_dim, 1, 1)
-    z = self.net6(z)
-    #print(z.size())
-    
-    return z
-
+#%%
 class Encoder(nn.Module):
-	def __init__(self, z_dim, channel=4, y_dim=4):
+	def __init__(self, z_dim, channel=3, y_dim=4, image_size=64):
 		super().__init__()
 		self.z_dim = z_dim
 		self.y_dim = y_dim
 		self.channel = channel
-		self.fc1 = nn.Linear(self.channel*96*96, 300)
+		self.image_size = image_size
+		self.fc1 = nn.Linear(channel * image_size * image_size, 300)
 		self.fc2 = nn.Linear(300+y_dim, 300)
 		self.fc3 = nn.Linear(300, 300)
 		self.fc4 = nn.Linear(300, 2 * z_dim)
 		self.LReLU = nn.LeakyReLU(0.2, inplace=True)
 		self.net = nn.Sequential(
-			nn.Linear(self.channel*96*96, 900),
+			nn.Linear(channel * image_size * image_size, 900),
 			nn.ELU(),
 			nn.Linear(900, 300),
 			nn.ELU(),
@@ -508,7 +334,7 @@ class Encoder(nn.Module):
 		)
 
 	def conditional_encode(self, x, l):
-		x = x.view(-1, self.channel*96*96)
+		x = x.view(-1, self.channel * self.image_size * self.image_size)
 		x = F.elu(self.fc1(x))
 		l = l.view(-1, 4)
 		x = F.elu(self.fc2(torch.cat([x, l], dim=1)))
@@ -519,21 +345,22 @@ class Encoder(nn.Module):
 
 	def encode(self, x, y=None):
 		xy = x if y is None else torch.cat((x, y), dim=1)
-		xy = xy.view(-1, self.channel*96*96)
+		xy = xy.view(-1, self.channel * self.image_size * self.image_size)
 		h = self.net(xy)
 		m, v = ut.gaussian_parameters(h, dim=1)
 		#print(self.z_dim,m.size(),v.size())
 		return m, v
-   
-   
+#%%
 class Decoder_DAG(nn.Module):
-	def __init__(self, z_dim, concept, z1_dim, channel = 4, y_dim=0):
+	def __init__(self, z_dim, concept, z1_dim, channel=3, y_dim=0, image_size=64):
 		super().__init__()
 		self.z_dim = z_dim
 		self.z1_dim = z1_dim
 		self.concept = concept
 		self.y_dim = y_dim
 		self.channel = channel
+		self.image_size = image_size
+  
 		#print(self.channel)
 		self.elu = nn.ELU()
 		self.net1 = nn.Sequential(
@@ -543,7 +370,7 @@ class Decoder_DAG(nn.Module):
 			nn.ELU(),
 			nn.Linear(300, 1024),
 			nn.ELU(),
-			nn.Linear(1024, self.channel*96*96)
+			nn.Linear(1024, channel * image_size * image_size)
 		)
 		self.net2 = nn.Sequential(
 			nn.Linear(z1_dim + y_dim, 300),
@@ -552,7 +379,7 @@ class Decoder_DAG(nn.Module):
 			nn.ELU(),
 			nn.Linear(300, 1024),
 			nn.ELU(),
-			nn.Linear(1024, self.channel*96*96)
+			nn.Linear(1024, channel * image_size * image_size)
 		)
 		self.net3 = nn.Sequential(
 			nn.Linear(z1_dim + y_dim, 300),
@@ -561,7 +388,7 @@ class Decoder_DAG(nn.Module):
 			nn.ELU(),
 			nn.Linear(300, 1024),
 			nn.ELU(),
-			nn.Linear(1024, self.channel*96*96)
+			nn.Linear(1024, channel * image_size * image_size)
 		)
 		self.net4 = nn.Sequential(
 			nn.Linear(z1_dim + y_dim, 300),
@@ -570,11 +397,11 @@ class Decoder_DAG(nn.Module):
 			nn.ELU(),
 			nn.Linear(300, 1024),
 			nn.ELU(),
-			nn.Linear(1024, self.channel*96*96)
+			nn.Linear(1024, channel * image_size * image_size)
 		)
 		self.net5 = nn.Sequential(
 			nn.ELU(),
-			nn.Linear(1024, self.channel*96*96)
+			nn.Linear(1024, channel * image_size * image_size)
 		)
    
 		self.net6 = nn.Sequential(
@@ -586,8 +413,9 @@ class Decoder_DAG(nn.Module):
 			nn.ELU(),
 			nn.Linear(1024, 1024),
 			nn.ELU(),
-			nn.Linear(1024, self.channel*96*96)
+			nn.Linear(1024, channel * image_size * image_size)
 		)
+  
 	def decode_condition(self, z, u):
 		#z = z.view(-1,3*4)
 		z = z.view(-1, 3*4)
@@ -609,7 +437,6 @@ class Decoder_DAG(nn.Module):
 		return h
    
 	def decode_union(self, z, u, y=None):
-		
 		z = z.view(-1, self.concept*self.z1_dim)
 		zy = z if y is None else torch.cat((z, y), dim=1)
 		if self.z1_dim == 1:
@@ -627,7 +454,7 @@ class Decoder_DAG(nn.Module):
 	def decode(self, z, u , y = None):
 		z = z.view(-1, self.concept*self.z1_dim)
 		h = self.net6(z)
-		return h, h,h,h,h
+		return h,h,h,h,h
     
 	def decode_sep(self, z, u, y=None):
 		z = z.view(-1, self.concept*self.z1_dim)
@@ -652,7 +479,6 @@ class Decoder_DAG(nn.Module):
 			h = (rx1+rx2+rx3+rx4)/self.concept
 		elif self.concept ==3:
 			h = (rx1+rx2+rx3)/self.concept
-		
 		return h,h,h,h,h
    
 	def decode_cat(self, z, u, y=None):
@@ -665,36 +491,4 @@ class Decoder_DAG(nn.Module):
 		rx4 = self.net4(zy4)
 		h = self.net5( torch.cat((rx1,rx2, rx3, rx4), dim=1))
 		return h
-   
-   
-class Decoder(nn.Module):
-	def __init__(self, z_dim, y_dim=0):
-		super().__init__()
-		self.z_dim = z_dim
-		self.y_dim = y_dim
-		self.net = nn.Sequential(
-			nn.Linear(z_dim + y_dim, 300),
-			nn.ELU(),
-			nn.Linear(300, 300),
-			nn.ELU(),
-			nn.Linear(300, 4*96*96)
-		)
-
-	def decode(self, z, y=None):
-		zy = z if y is None else torch.cat((z, y), dim=1)
-		return self.net(zy)
-
-class Classifier(nn.Module):
-	def __init__(self, y_dim):
-		super().__init__()
-		self.y_dim = y_dim
-		self.net = nn.Sequential(
-			nn.Linear(784, 300),
-			nn.ReLU(),
-			nn.Linear(300, 300),
-			nn.ReLU(),
-			nn.Linear(300, y_dim)
-		)
-
-	def classify(self, x):
-		return self.net(x)
+#%%
