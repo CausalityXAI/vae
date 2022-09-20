@@ -115,11 +115,11 @@ def main():
             self.x_data = np.array(train_x).astype(float) / 255.
             
             label = np.array([x[:-4].split('_')[1:] for x in train_imgs]).astype(float)
-            label = label - label.mean(axis=0)
             self.std = label.std(axis=0)
-            """bounded label: normalize to (0, 1)"""
-            if args["label_normalization"]: 
-                label = (label - label.min(axis=0)) / (label.max(axis=0) - label.min(axis=0))
+            """label standardization"""
+            if args["label_standardization"]: 
+                label -= label.mean(axis=0)
+                label /= label.std(axis=0)
             self.y_data = label
             self.name = ['light', 'angle', 'length', 'position']
 
@@ -134,10 +134,13 @@ def main():
     dataset = CustomDataset(args)
     dataloader = DataLoader(dataset, batch_size=args["batch_size"], shuffle=True)
     #%%
+    """estimated causal matrix"""
     print('DAG:{}'.format(lvae.dag.A))
+    B_est = lvae.dag.A.detach().cpu().numpy()
+    fig = viz_heatmap(np.flipud(B_est), size=(7, 7))
+    wandb.log({'B_est': wandb.Image(fig)})
     #%%
     """intervention range"""
-    lambdav = 0.001
     decode_m_max = []
     decode_m_min = []
     # e_tilde_max = []
@@ -148,7 +151,7 @@ def main():
         if args["cuda"]:
             u = u.cuda()
             l = l.cuda()
-        _, _, decode_m, decode_v, _, e_tilde, f_z1, _, _, _ = lvae.encode(u, l, sample=False)
+        _, _, decode_m, _, _, e_tilde, f_z1, _, _, _ = lvae.encode(u, l, sample=False)
         decode_m_max.append(decode_m.max().detach().cpu().numpy())
         decode_m_min.append(decode_m.min().detach().cpu().numpy())
         # e_tilde_max.append(e_tilde.max().detach().cpu().numpy())

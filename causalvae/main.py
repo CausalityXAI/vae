@@ -74,7 +74,7 @@ def get_args(debug):
 	parser.add_argument('--image_size', default=64, type=int,
 						help='width and heigh of image')
 
-	parser.add_argument("--label_normalization", default=True, type=bool,
+	parser.add_argument("--label_standardization", default=True, type=bool,
                         help="If True, normalize additional information label data")
  
 	parser.add_argument('--epochs', default=100, type=int,
@@ -110,7 +110,6 @@ def train(dataloader, lvae, args, optimizer, device):
 		loss_ = []
 
 		L, kl, rec, mask, reconstructed_image, _ = lvae.negative_elbo_bound(u, l, sample = False)
-		q_m, q_v, decode_m, decode_v, f_z1, _, z_given_dag, g_u = lvae.encode(u, l)
 		dag_param = lvae.dag.A
 
 		h_a = _h_A(dag_param, dag_param.size()[0])
@@ -165,11 +164,11 @@ def main():
 			self.x_data = np.array(train_x).astype(float) / 255.
 			
 			label = np.array([x[:-4].split('_')[1:] for x in train_imgs]).astype(float)
-			label = label - label.mean(axis=0)
 			self.std = label.std(axis=0)
-			"""bounded label: normalize to (0, 1)"""
-			if args["label_normalization"]: 
-				label = (label - label.min(axis=0)) / (label.max(axis=0) - label.min(axis=0))
+			"""label standardization"""
+			if args["label_standardization"]: 
+				label -= label.mean(axis=0)
+				label /= label.std(axis=0)
 			self.y_data = label
 			self.name = ['light', 'angle', 'length', 'position']
 
