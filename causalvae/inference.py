@@ -163,6 +163,7 @@ def main():
     f_z1_range = (min(f_z1_min), max(f_z1_max))
     causal_range = [decode_m_range, f_z1_range]
     #%%
+    """do-intervention"""
     dataloader = DataLoader(dataset, batch_size=1, shuffle=True)
     iter_test = iter(dataloader)
     count = 1
