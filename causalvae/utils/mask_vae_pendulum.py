@@ -15,10 +15,11 @@ Reference:
 import os
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
 
+import utils.util as ut
+import utils.mask as nns
+
 import torch
 import numpy as np
-import util as ut
-import mask as nns
 from torch import nn
 from torch.nn import functional as F
 # device = torch.device("cuda:0" if(torch.cuda.is_available()) else "cpu")

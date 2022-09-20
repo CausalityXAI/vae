@@ -15,10 +15,11 @@ Reference:
 import os
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
 
+import utils.util as ut
+
 import numpy as np
 import torch
 import torch.nn.functional as F
-import util as ut
 from torch import autograd, nn, optim
 from torch import nn
 from torch.nn import functional as F
