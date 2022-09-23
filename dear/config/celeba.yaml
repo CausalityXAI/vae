@@ -1,4 +1,5 @@
-labels: "smile" 
+# labels: "smile" 
+labels: "age" 
 dec_dist: "implicit" 
 d_steps_per_iter: 1 
 sample_every_epoch: 5 
