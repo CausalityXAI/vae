@@ -33,6 +33,7 @@ from pprint import pprint
 from PIL import Image
 import os
 import tqdm
+import pandas as pd
 
 from utils.util import _h_A
 import utils.util as ut
@@ -58,7 +59,7 @@ except:
 wandb.init(
     project="(causal)CausalVAE", 
     entity="anseunghwan",
-    tags=["EDA", "pendulum"],
+    tags=["Metric", "pendulum"],
 )
 #%%
 import argparse
@@ -134,11 +135,39 @@ def main():
     dataset = CustomDataset(args)
     dataloader = DataLoader(dataset, batch_size=args["batch_size"], shuffle=True)
     #%%
-    """estimated causal matrix"""
-    print('DAG:{}'.format(lvae.dag.A))
-    B_est = lvae.dag.A.detach().cpu().numpy()
-    fig = viz_heatmap(np.flipud(B_est), size=(7, 7))
-    wandb.log({'B_est': wandb.Image(fig)})
+    """import baseline classifier"""
+    artifact = wandb.use_artifact('anseunghwan/(proposal)CausalVAE/model_classifier:v{}'.format(0), type='model')
+    model_dir = artifact.download()
+    from utils.model_classifier import Classifier
+    """masking"""
+    # if args["dataset"] == 'pendulum':
+    mask = []
+    # light
+    m = torch.zeros(args["image_size"], args["image_size"], 3)
+    m[:20, ...] = 1
+    mask.append(m)
+    # angle
+    m = torch.zeros(args["image_size"], args["image_size"], 3)
+    m[20:51, ...] = 1
+    mask.append(m)
+    # shadow
+    m = torch.zeros(args["image_size"], args["image_size"], 3)
+    m[51:, ...] = 1
+    mask.append(m)
+    m = torch.zeros(args["image_size"], args["image_size"], 3)
+    m[51:, ...] = 1
+    mask.append(m)
+    
+    args["node"] = 4
+        
+    # elif args["dataset"] == 'celeba':
+    #     raise NotImplementedError('Not yet for CELEBA dataset!')
+    
+    classifier = Classifier(mask, args, device) 
+    if args["cuda"]:
+        classifier.load_state_dict(torch.load(model_dir + '/model_{}.pth'.format('classifier')))
+    else:
+        classifier.load_state_dict(torch.load(model_dir + '/model_{}.pth'.format('classifier'), map_location=torch.device('cpu')))
     #%%
     """intervention range"""
     decode_m_max = []
@@ -163,35 +192,53 @@ def main():
     f_z1_range = (min(f_z1_min), max(f_z1_max))
     causal_range = [decode_m_range, f_z1_range]
     #%%
-    """do-intervention"""
-    dataloader = DataLoader(dataset, batch_size=1, shuffle=True)
-    iter_test = iter(dataloader)
-    count = 1
-    for _ in range(count):
-        u, l = next(iter_test)
-    if args["cuda"]:
-        u = u.cuda()
-        l = l.cuda()
+    """metric"""
+    dim = 4
+    ACE_dict = {x:[] for x in dataset.name}
+    s = 'length'
+    c = 'light'
+    for s in ['light', 'angle', 'length', 'position']:
+        for c in ['light', 'angle', 'length', 'position']:
+            ACE = 0
+            dataloader = DataLoader(dataset, batch_size=args["batch_size"], shuffle=False)
+            for x_batch, y_batch in tqdm.tqdm(iter(dataloader)):
+                if args["cuda"]:
+                    x_batch = x_batch.cuda()
+                    y_batch = y_batch.cuda()
+
+                with torch.no_grad():
+                    do_index = dataset.name.index(s)
+                    
+                    score = []
+                    if do_index < 2:
+                        for val in [causal_range[0][0], causal_range[0][1]]:
+                            _, _, _, _, reconstructed_image, _= lvae.negative_elbo_bound(u, l, do_index, sample = False, adj=val)
+                            reconstructed_image = torch.sigmoid(reconstructed_image)
+                            
+                            """factor classification"""
+                            score.append(torch.sigmoid(classifier(reconstructed_image))[:, dataset.name.index(c)])
+                            
+                    else:
+                        for val in [causal_range[1][0], causal_range[1][1]]:
+                            _, _, _, _, reconstructed_image, _= lvae.negative_elbo_bound(u, l, do_index, sample = False, adj=val)
+                            reconstructed_image = torch.sigmoid(reconstructed_image)
+                            
+                            """factor classification"""
+                            score.append(torch.sigmoid(classifier(reconstructed_image))[:, dataset.name.index(c)])
+                    
+                    ACE += (score[0] - score[1]).sum()
+            ACE /= dataset.__len__()
+            ACE_dict[s] = ACE_dict.get(s) + [(c, ACE.abs().item())]
     
-    fig, ax = plt.subplots(4, 9, figsize=(10, 4))
+    ACE_mat = np.zeros((dim, dim))
+    for i, c in enumerate(dataset.name):
+        ACE_mat[i, :] = [x[1] for x in ACE_dict[c]]
     
-    for i in range(4): # masking node index
-        if i < 2:
-            for k, j in enumerate(np.linspace(causal_range[0][0], causal_range[0][1], 9)): # do-intervention value
-                _, _, _, _, reconstructed_image, _= lvae.negative_elbo_bound(u, l, i, sample = False, adj=j)
-                ax[i, k].imshow(torch.sigmoid(reconstructed_image[0]).detach().cpu().numpy())
-                ax[i, k].axis('off')    
-        else:
-            for k, j in enumerate(np.linspace(causal_range[1][0], causal_range[1][1], 9)): # do-intervention value
-                _, _, _, _, reconstructed_image, _= lvae.negative_elbo_bound(u, l, i, sample = False, adj=j)
-                ax[i, k].imshow(torch.sigmoid(reconstructed_image[0]).detach().cpu().numpy())
-                ax[i, k].axis('off')    
+    fig = viz_heatmap(np.flipud(ACE_mat), size=(7, 7))
+    wandb.log({'ACE': wandb.Image(fig)})
     
-    plt.savefig('{}/do.png'.format(model_dir), bbox_inches='tight')
-    # plt.show()
-    plt.close()
-    
-    wandb.log({'do intervention ({})'.format(', '.join(dataset.name)): wandb.Image(fig)})
+    # save as csv
+    pd.DataFrame(ACE_mat.round(3), columns=dataset.name, index=dataset.name).to_csv('./assets/ACE.csv')
     #%%
     wandb.run.finish()
 #%%
