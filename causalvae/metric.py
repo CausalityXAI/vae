@@ -133,7 +133,7 @@ def main():
             return x, y
 
     dataset = CustomDataset(args)
-    dataloader = DataLoader(dataset, batch_size=args["batch_size"], shuffle=True)
+    dataloader = DataLoader(dataset, batch_size=args["batch_size"], shuffle=False)
     #%%
     """import baseline classifier"""
     artifact = wandb.use_artifact('anseunghwan/(proposal)CausalVAE/model_classifier:v{}'.format(0), type='model')
@@ -212,7 +212,7 @@ def main():
                     score = []
                     if do_index < 2:
                         for val in [causal_range[0][0], causal_range[0][1]]:
-                            _, _, _, _, reconstructed_image, _= lvae.negative_elbo_bound(u, l, do_index, sample = False, adj=val)
+                            _, _, _, _, reconstructed_image, _= lvae.negative_elbo_bound(u, l, do_index, sample = False, adj=torch.tensor(val))
                             reconstructed_image = torch.sigmoid(reconstructed_image)
                             
                             """factor classification"""
@@ -220,7 +220,7 @@ def main():
                             
                     else:
                         for val in [causal_range[1][0], causal_range[1][1]]:
-                            _, _, _, _, reconstructed_image, _= lvae.negative_elbo_bound(u, l, do_index, sample = False, adj=val)
+                            _, _, _, _, reconstructed_image, _= lvae.negative_elbo_bound(u, l, do_index, sample = False, adj=torch.tensor(val))
                             reconstructed_image = torch.sigmoid(reconstructed_image)
                             
                             """factor classification"""
