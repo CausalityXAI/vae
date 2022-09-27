@@ -183,32 +183,19 @@ def main():
         num_label, 
         A
     )
-    discriminator = BigJointDiscriminator(
-        args["latent_dim"], 
-        args["d_conv_dim"], 
-        args["image_size"],
-        args["dis_fc_size"]
-    )
     if args["cuda"]:
         if args["dataset"] == "celeba":
             model.load_state_dict(torch.load(model_dir + '/model_{}.pth'.format(args["dataset"])))
-            discriminator.load_state_dict(torch.load(model_dir + '/discriminator_{}.pth'.format(args["dataset"])))
         else:
             model.load_state_dict(torch.load(model_dir + '/model.pth'))
-            discriminator.load_state_dict(torch.load(model_dir + '/discriminator.pth'))
         model = model.to(device)
-        discriminator = discriminator.to(device)
     else:
         if args["dataset"] == "celeba":
             model.load_state_dict(torch.load(model_dir + '/model_{}.pth'.format(args["dataset"]), 
                                             map_location=torch.device('cpu')))
-            discriminator.load_state_dict(torch.load(model_dir + '/discriminator_{}.pth'.format(args["dataset"]), 
-                                                    map_location=torch.device('cpu')))
         else:
             model.load_state_dict(torch.load(model_dir + '/model.pth', 
                                             map_location=torch.device('cpu')))
-            discriminator.load_state_dict(torch.load(model_dir + '/discriminator.pth', 
-                                                    map_location=torch.device('cpu')))
     #%%
     """import baseline classifier"""
     artifact = wandb.use_artifact('anseunghwan/(proposal)CausalVAE/model_classifier:v{}'.format(0), type='model')
@@ -251,13 +238,14 @@ def main():
             x_batch = x_batch.cuda()
             y_batch = y_batch.cuda()
         
-        latent = model.encode(x_batch, mean=True)
+        with torch.no_grad(): # out of memory issue
+            latent = model.encode(x_batch, mean=True)
         latents.append(latent)
     
     latents = torch.cat(latents, dim=0)
     
-    latent_min = latents.detach().numpy().min(axis=0)[:4]
-    latent_max = latents.detach().numpy().max(axis=0)[:4]
+    latent_min = latents.cpu().numpy().min(axis=0)[:4]
+    latent_max = latents.cpu().numpy().max(axis=0)[:4]
     #%%
     """metric"""
     dim = 4
@@ -267,7 +255,7 @@ def main():
     for s in ['light', 'angle', 'length', 'position']:
         for c in ['light', 'angle', 'length', 'position']:
             ACE = 0
-            dataloader = DataLoader(dataset, batch_size=args["batch_size"], shuffle=False)
+            dataloader = DataLoader(dataset, batch_size=args["batch_size"], shuffle=False) 
             for x_batch, y_batch in tqdm.tqdm(iter(dataloader)):
                 if args["cuda"]:
                     x_batch = x_batch.cuda()
