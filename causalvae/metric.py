@@ -180,7 +180,10 @@ def main():
         if args["cuda"]:
             u = u.cuda()
             l = l.cuda()
-        _, _, decode_m, _, _, e_tilde, f_z1, _, _, _ = lvae.encode(u, l, sample=False)
+        
+        with torch.no_grad():
+            _, _, decode_m, _, _, e_tilde, f_z1, _, _, _ = lvae.encode(u, l, sample=False)
+            
         decode_m_max.append(decode_m.max().detach().cpu().numpy())
         decode_m_min.append(decode_m.min().detach().cpu().numpy())
         # e_tilde_max.append(e_tilde.max().detach().cpu().numpy())
@@ -194,21 +197,24 @@ def main():
     #%%
     """metric"""
     dim = 4
-    ACE_dict = {x:[] for x in dataset.name}
+    ACE_dict_lower = {x:[] for x in dataset.name}
+    ACE_dict_upper = {x:[] for x in dataset.name}
     s = 'length'
     c = 'light'
     for s in ['light', 'angle', 'length', 'position']:
         for c in ['light', 'angle', 'length', 'position']:
-            ACE = 0
+            ACE_lower = 0
+            ACE_upper = 0
+            
             dataloader = DataLoader(dataset, batch_size=args["batch_size"], shuffle=False)
             for x_batch, y_batch in tqdm.tqdm(iter(dataloader)):
                 if args["cuda"]:
                     x_batch = x_batch.cuda()
                     y_batch = y_batch.cuda()
 
+                do_index = dataset.name.index(s)
+                
                 with torch.no_grad():
-                    do_index = dataset.name.index(s)
-                    
                     score = []
                     if do_index < 2:
                         for val in [causal_range[0][0], causal_range[0][1]]:
@@ -226,19 +232,29 @@ def main():
                             """factor classification"""
                             score.append(torch.sigmoid(classifier(reconstructed_image))[:, dataset.name.index(c)])
                     
-                    ACE += (score[0] - score[1]).sum()
-            ACE /= dataset.__len__()
-            ACE_dict[s] = ACE_dict.get(s) + [(c, ACE.abs().item())]
-    
-    ACE_mat = np.zeros((dim, dim))
+                    ACE_lower += (score[0] - score[1]).sum()
+                    ACE_upper += (score[0] - score[1]).abs().sum()
+                    
+            ACE_lower /= dataset.__len__()
+            ACE_upper /= dataset.__len__()
+            ACE_dict_lower[s] = ACE_dict_lower.get(s) + [(c, ACE_lower.abs().item())]
+            ACE_dict_upper[s] = ACE_dict_upper.get(s) + [(c, ACE_upper.item())]
+    #%%
+    ACE_mat_lower = np.zeros((dim, dim))
     for i, c in enumerate(dataset.name):
-        ACE_mat[i, :] = [x[1] for x in ACE_dict[c]]
+        ACE_mat_lower[i, :] = [x[1] for x in ACE_dict_lower[c]]
+    ACE_mat_upper = np.zeros((dim, dim))
+    for i, c in enumerate(dataset.name):
+        ACE_mat_upper[i, :] = [x[1] for x in ACE_dict_upper[c]]
     
-    fig = viz_heatmap(np.flipud(ACE_mat), size=(7, 7))
-    wandb.log({'ACE': wandb.Image(fig)})
+    fig = viz_heatmap(np.flipud(ACE_mat_lower), size=(7, 7))
+    wandb.log({'ACE(lower)': wandb.Image(fig)})
+    fig = viz_heatmap(np.flipud(ACE_mat_upper), size=(7, 7))
+    wandb.log({'ACE(upper)': wandb.Image(fig)})
     
     # save as csv
-    pd.DataFrame(ACE_mat.round(3), columns=dataset.name, index=dataset.name).to_csv('./assets/ACE.csv')
+    pd.DataFrame(ACE_mat_lower.round(3), columns=dataset.name, index=dataset.name).to_csv('./assets/ACE_lower_causalvae.csv')
+    pd.DataFrame(ACE_mat_upper.round(3), columns=dataset.name, index=dataset.name).to_csv('./assets/ACE_upper_causalvae.csv')
     #%%
     wandb.run.finish()
 #%%
