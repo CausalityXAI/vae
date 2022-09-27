@@ -136,7 +136,7 @@ def main():
                 return x, y
         
         dataset = CustomDataset(args)
-        train_loader = DataLoader(dataset, batch_size=args["batch_size"], shuffle=True)
+        train_loader = DataLoader(dataset, batch_size=args["batch_size"], shuffle=False)
     
     elif args["dataset"] == "celeba": 
         train_loader = None
@@ -151,7 +151,7 @@ def main():
             os.makedirs(data_dir)
         train_set = datasets.CelebA(data_dir, split='train', download=True, transform=trans_f)
         train_loader = torch.utils.data.DataLoader(train_set, batch_size=args["batch_size"], 
-                                                    shuffle=True, pin_memory=False,
+                                                    shuffle=False, pin_memory=False,
                                                     drop_last=True, num_workers=0)
     #%%
     if 'scm' in args["prior"]:
@@ -249,12 +249,15 @@ def main():
     #%%
     """metric"""
     dim = 4
-    ACE_dict = {x:[] for x in dataset.name}
+    ACE_dict_lower = {x:[] for x in dataset.name}
+    ACE_dict_upper = {x:[] for x in dataset.name}
     s = 'length'
     c = 'light'
     for s in ['light', 'angle', 'length', 'position']:
         for c in ['light', 'angle', 'length', 'position']:
-            ACE = 0
+            ACE_lower = 0
+            ACE_upper = 0
+            
             dataloader = DataLoader(dataset, batch_size=args["batch_size"], shuffle=False) 
             for x_batch, y_batch in tqdm.tqdm(iter(dataloader)):
                 if args["cuda"]:
@@ -290,19 +293,30 @@ def main():
                         
                         """factor classification"""
                         score.append(torch.sigmoid(classifier(xhat))[:, dataset.name.index(c)])
-                    ACE += (score[0] - score[1]).sum()
-            ACE /= dataset.__len__()
-            ACE_dict[s] = ACE_dict.get(s) + [(c, ACE.abs().item())]
-    
-    ACE_mat = np.zeros((dim, dim))
+                    
+                    ACE_lower += (score[0] - score[1]).sum()
+                    ACE_upper += (score[0] - score[1]).abs().sum()
+                    
+            ACE_lower /= dataset.__len__()
+            ACE_upper /= dataset.__len__()
+            ACE_dict_lower[s] = ACE_dict_lower.get(s) + [(c, ACE_lower.abs().item())]
+            ACE_dict_upper[s] = ACE_dict_upper.get(s) + [(c, ACE_upper.item())]
+    #%%
+    ACE_mat_lower = np.zeros((dim, dim))
     for i, c in enumerate(dataset.name):
-        ACE_mat[i, :] = [x[1] for x in ACE_dict[c]]
+        ACE_mat_lower[i, :] = [x[1] for x in ACE_dict_lower[c]]
+    ACE_mat_upper = np.zeros((dim, dim))
+    for i, c in enumerate(dataset.name):
+        ACE_mat_upper[i, :] = [x[1] for x in ACE_dict_upper[c]]
     
-    fig = viz_heatmap(np.flipud(ACE_mat), size=(7, 7))
-    wandb.log({'ACE': wandb.Image(fig)})
+    fig = viz_heatmap(np.flipud(ACE_mat_lower), size=(7, 7))
+    wandb.log({'ACE(lower)': wandb.Image(fig)})
+    fig = viz_heatmap(np.flipud(ACE_mat_upper), size=(7, 7))
+    wandb.log({'ACE(upper)': wandb.Image(fig)})
     
     # save as csv
-    pd.DataFrame(ACE_mat.round(3), columns=dataset.name, index=dataset.name).to_csv('./assets/ACE.csv')
+    pd.DataFrame(ACE_mat_lower.round(3), columns=dataset.name, index=dataset.name).to_csv('./assets/ACE_lower_dear.csv')
+    pd.DataFrame(ACE_mat_upper.round(3), columns=dataset.name, index=dataset.name).to_csv('./assets/ACE_upper_dear.csv')
     #%%
     wandb.run.finish()
 #%%
