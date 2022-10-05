@@ -180,6 +180,7 @@ def main():
                 self.x_data = (np.array(train_x).astype(float) - 127.5) / 127.5
                 
                 label = np.array([x[:-4].split('_')[1:] for x in train_imgs]).astype(float)
+                label = label[:, :4]
                 label = label - label.mean(axis=0)
                 self.std = label.std(axis=0)
                 """bounded label: normalize to (0, 1)"""
