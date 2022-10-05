@@ -7,9 +7,9 @@ Reference:
 import torchvision.models as models
 import torch.nn.init as init
 
-from utils.resnet import *
-from utils.sagan import *
-from utils.causal_model import *
+from modules.resnet import *
+from modules.sagan import *
+from modules.causal_model import *
 #%%
 class ResEncoder(nn.Module):
     r'''ResNet Encoder
