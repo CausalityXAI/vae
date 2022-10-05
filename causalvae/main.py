@@ -34,10 +34,10 @@ from PIL import Image
 import os
 import tqdm
 
-from utils.util import _h_A
-import utils.util as ut
-from utils.mask_vae_pendulum import CausalVAE
-from utils.viz import (
+from modules.util import _h_A
+import modules.util as ut
+from modules.mask_vae_pendulum import CausalVAE
+from modules.viz import (
     viz_graph,
     viz_heatmap,
 )
@@ -68,6 +68,8 @@ def get_args(debug):
  
 	parser.add_argument('--seed', type=int, default=1, 
 						help='seed for repeatable results')
+	parser.add_argument('--DR', default=False, type=bool, 
+                     	help='If True, use dataset with spurious correlation')
 
 	parser.add_argument("--z_dim", default=16, type=int,
                         help="the number of latent dimension")
@@ -155,15 +157,21 @@ def main():
 	"""dataset"""
 	class CustomDataset(Dataset): 
 		def __init__(self, args):
-			train_imgs = [x for x in os.listdir('./utils/causal_data/pendulum/train') if x.endswith('png')]
+			if args["DR"]:
+				foldername = 'pendulum_DR'
+			else:
+				foldername = 'pendulum_real'
+			train_imgs = [x for x in os.listdir('./modules/causal_data/{}/train'.format(foldername)) if x.endswith('png')]
+   
 			train_x = []
 			for i in tqdm.tqdm(range(len(train_imgs)), desc="train data loading"):
 				train_x.append(np.array(
-					Image.open("./utils/causal_data/pendulum/train/{}".format(train_imgs[i])).resize((args["image_size"], args["image_size"]))
+					Image.open("./modules/causal_data/{}/train/{}".format(foldername, train_imgs[i])).resize((args["image_size"], args["image_size"]))
 					)[:, :, :3])
 			self.x_data = np.array(train_x).astype(float) / 255.
 			
 			label = np.array([x[:-4].split('_')[1:] for x in train_imgs]).astype(float)
+			label = label[:, :4]
 			self.std = label.std(axis=0)
 			"""label standardization"""
 			if args["label_standardization"]: 
