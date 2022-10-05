@@ -26,11 +26,11 @@ from torch.utils.data import TensorDataset, DataLoader
 import numpy as np
 import matplotlib.pyplot as plt
 
-import utils
-from utils.model import *
-from utils.sagan import *
-from utils.causal_model import *
-from utils.viz import (
+import modules
+from modules.model import *
+from modules.sagan import *
+from modules.causal_model import *
+from modules.viz import (
     viz_graph,
     viz_heatmap,
 )
@@ -60,6 +60,7 @@ def get_args(debug):
     # Data settings
     parser.add_argument('--image_size', type=int, default=64)
     parser.add_argument('--dataset', type=str, default='celeba', choices=['celeba', 'pendulum'])
+    parser.add_argument('--DR', default=False, type=bool, help='If True, use dataset with spurious correlation')
 
     # Training settings
     parser.add_argument('--batch_size', type=int, default=128)
@@ -165,12 +166,16 @@ def main():
     if args["dataset"] == "pendulum":
         class CustomDataset(Dataset): 
             def __init__(self, args):
-                train_imgs = [x for x in os.listdir('./utils/causal_data/pendulum/train') if x.endswith('png')]
+                if args["DR"]:
+                    foldername = 'pendulum_DR'
+                else:
+                    foldername = 'pendulum_real'
+                train_imgs = [x for x in os.listdir('./modules/causal_data/{}/train'.format(foldername)) if x.endswith('png')]
                 train_x = []
                 for i in tqdm.tqdm(range(len(train_imgs)), desc="train data loading"):
                     train_x.append(np.transpose(
                         np.array(
-                        Image.open("./utils/causal_data/pendulum/train/{}".format(train_imgs[i])).resize((args["image_size"], args["image_size"]))
+                        Image.open("./modules/causal_data/{}/train/{}".format(foldername, train_imgs[i])).resize((args["image_size"], args["image_size"]))
                         )[:, :, :3], (2, 0, 1)))
                 self.x_data = (np.array(train_x).astype(float) - 127.5) / 127.5
                 
