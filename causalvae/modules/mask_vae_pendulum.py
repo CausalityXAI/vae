@@ -15,8 +15,8 @@ Reference:
 import os
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
 
-import utils.util as ut
-import utils.mask as nns
+import modules.util as ut
+import modules.mask as nns
 
 import torch
 import numpy as np
