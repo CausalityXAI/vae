@@ -21,11 +21,11 @@ from torch.utils.data import TensorDataset, DataLoader
 import numpy as np
 import matplotlib.pyplot as plt
 
-import utils
-from utils.model import *
-from utils.sagan import *
-from utils.causal_model import *
-from utils.viz import (
+import modules
+from modules.model import *
+from modules.sagan import *
+from modules.causal_model import *
+from modules.viz import (
     viz_graph,
     viz_heatmap,
 )
@@ -51,7 +51,7 @@ import argparse
 def get_args(debug):
 	parser = argparse.ArgumentParser('parameters')
  
-	parser.add_argument('--num', type=int, default=2, 
+	parser.add_argument('--num', type=int, default=0, 
 						help='model version')
 
 	if debug:
@@ -75,10 +75,7 @@ def main():
     args = vars(get_args(debug=True))
     args["dataset"] = "pendulum"
     
-    if args["dataset"] == "celeba":
-        artifact = wandb.use_artifact('anseunghwan/(causal)DEAR/model_{}:v{}'.format(args["dataset"], args["num"]), type='model')
-    else:
-        artifact = wandb.use_artifact('anseunghwan/(causal)DEAR/model:v{}'.format(args["num"]), type='model')
+    artifact = wandb.use_artifact('anseunghwan/(causal)DEAR/model_{}:v{}'.format(args["dataset"], args["num"]), type='model')
     for key, item in artifact.metadata.items():
         args[key] = item
     args["cuda"] = torch.cuda.is_available()
@@ -106,16 +103,21 @@ def main():
     if args["dataset"] == "pendulum":
         class CustomDataset(Dataset): 
             def __init__(self, args):
-                train_imgs = [x for x in os.listdir('./utils/causal_data/pendulum/train') if x.endswith('png')]
+                if args["DR"]:
+                    foldername = 'pendulum_DR'
+                else:
+                    foldername = 'pendulum_real'
+                train_imgs = [x for x in os.listdir('./modules/causal_data/{}/train'.format(foldername)) if x.endswith('png')]
                 train_x = []
                 for i in tqdm.tqdm(range(len(train_imgs)), desc="train data loading"):
                     train_x.append(np.transpose(
                         np.array(
-                        Image.open("./utils/causal_data/pendulum/train/{}".format(train_imgs[i])).resize((args["image_size"], args["image_size"]))
+                        Image.open("./modules/causal_data/{}/train/{}".format(foldername, train_imgs[i])).resize((args["image_size"], args["image_size"]))
                         )[:, :, :3], (2, 0, 1)))
                 self.x_data = (np.array(train_x).astype(float) - 127.5) / 127.5
                 
                 label = np.array([x[:-4].split('_')[1:] for x in train_imgs]).astype(float)
+                label = label[:, :4]
                 label = label - label.mean(axis=0)
                 self.std = label.std(axis=0)
                 """bounded label: normalize to (0, 1)"""
@@ -189,25 +191,15 @@ def main():
         args["dis_fc_size"]
     )
     if args["cuda"]:
-        if args["dataset"] == "celeba":
-            model.load_state_dict(torch.load(model_dir + '/model_{}.pth'.format(args["dataset"])))
-            discriminator.load_state_dict(torch.load(model_dir + '/discriminator_{}.pth'.format(args["dataset"])))
-        else:
-            model.load_state_dict(torch.load(model_dir + '/model.pth'))
-            discriminator.load_state_dict(torch.load(model_dir + '/discriminator.pth'))
+        model.load_state_dict(torch.load(model_dir + '/model_{}.pth'.format(args["dataset"])))
+        discriminator.load_state_dict(torch.load(model_dir + '/discriminator_{}.pth'.format(args["dataset"])))
         model = model.to(device)
         discriminator = discriminator.to(device)
     else:
-        if args["dataset"] == "celeba":
-            model.load_state_dict(torch.load(model_dir + '/model_{}.pth'.format(args["dataset"]), 
-                                            map_location=torch.device('cpu')))
-            discriminator.load_state_dict(torch.load(model_dir + '/discriminator_{}.pth'.format(args["dataset"]), 
-                                                    map_location=torch.device('cpu')))
-        else:
-            model.load_state_dict(torch.load(model_dir + '/model.pth', 
-                                            map_location=torch.device('cpu')))
-            discriminator.load_state_dict(torch.load(model_dir + '/discriminator.pth', 
-                                                    map_location=torch.device('cpu')))
+        model.load_state_dict(torch.load(model_dir + '/model_{}.pth'.format(args["dataset"]), 
+                                        map_location=torch.device('cpu')))
+        discriminator.load_state_dict(torch.load(model_dir + '/discriminator_{}.pth'.format(args["dataset"]), 
+                                                map_location=torch.device('cpu')))
     #%%
     """estimated causal matrix"""
     print('DAG:{}'.format(model.prior.A))

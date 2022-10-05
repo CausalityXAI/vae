@@ -34,10 +34,10 @@ from PIL import Image
 import os
 import tqdm
 
-from utils.util import _h_A
-import utils.util as ut
-from utils.mask_vae_pendulum import CausalVAE
-from utils.viz import (
+from modules.util import _h_A
+import modules.util as ut
+from modules.mask_vae_pendulum import CausalVAE
+from modules.viz import (
     viz_graph,
     viz_heatmap,
 )
@@ -64,9 +64,8 @@ wandb.init(
 import argparse
 def get_args(debug):
 	parser = argparse.ArgumentParser('parameters')
-	# parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
  
-	parser.add_argument('--num', type=int, default=0, 
+	parser.add_argument('--num', type=int, default=1, 
 						help='model version')
 
 	if debug:
@@ -102,19 +101,24 @@ def main():
     else:
         lvae.load_state_dict(torch.load(model_dir + '/model_{}.pth'.format('CausalVAE'), map_location=torch.device('cpu')))
     #%%
- 
     """dataset"""
     class CustomDataset(Dataset): 
         def __init__(self, args):
-            train_imgs = [x for x in os.listdir('./utils/causal_data/pendulum/train') if x.endswith('png')]
+            if args["DR"]:
+                foldername = 'pendulum_DR'
+            else:
+                foldername = 'pendulum_real'
+                train_imgs = [x for x in os.listdir('./modules/causal_data/{}/train'.format(foldername)) if x.endswith('png')]
+
             train_x = []
             for i in tqdm.tqdm(range(len(train_imgs)), desc="train data loading"):
                 train_x.append(np.array(
-                    Image.open("./utils/causal_data/pendulum/train/{}".format(train_imgs[i])).resize((args["image_size"], args["image_size"]))
+                    Image.open("./modules/causal_data/{}/train/{}".format(foldername, train_imgs[i])).resize((args["image_size"], args["image_size"]))
                     )[:, :, :3])
             self.x_data = np.array(train_x).astype(float) / 255.
-            
+
             label = np.array([x[:-4].split('_')[1:] for x in train_imgs]).astype(float)
+            label = label[:, :4]
             self.std = label.std(axis=0)
             """label standardization"""
             if args["label_standardization"]: 
@@ -130,7 +134,7 @@ def main():
             x = torch.FloatTensor(self.x_data[idx])
             y = torch.FloatTensor(self.y_data[idx])
             return x, y
-
+    
     dataset = CustomDataset(args)
     dataloader = DataLoader(dataset, batch_size=args["batch_size"], shuffle=True)
     #%%
