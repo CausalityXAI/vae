@@ -59,7 +59,7 @@ def get_args(debug):
 
     # Data settings
     parser.add_argument('--image_size', type=int, default=64)
-    parser.add_argument('--dataset', type=str, default='celeba', choices=['celeba', 'pendulum'])
+    parser.add_argument('--dataset', type=str, default='pendulum', choices=['celeba', 'pendulum'])
     parser.add_argument('--DR', default=False, type=bool, help='If True, use dataset with spurious correlation')
 
     # Training settings
@@ -210,7 +210,7 @@ def main():
             transforms.ToTensor(),
             transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
         ])
-        data_dir = './utils/causal_data/celeba'
+        data_dir = './modules/causal_data/celeba'
         if not os.path.exists(data_dir): 
             os.makedirs(data_dir)
         train_set = datasets.CelebA(data_dir, split='train', download=True, transform=trans_f)
