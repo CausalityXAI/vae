@@ -182,7 +182,7 @@ def main():
         with torch.no_grad():
             xhat = model.decoder(torch.cat([label_z, other_z], dim=1))
             for k in range(n):
-                ax[idx, k].imshow((xhat[k].permute(1, 2, 0) + 1) / 2)
+                ax[idx, k].imshow((xhat[k].cpu().permute(1, 2, 0) + 1) / 2)
                 ax[idx, k].axis('off')
     
     plt.savefig('{}/do.png'.format(model_dir), bbox_inches='tight')

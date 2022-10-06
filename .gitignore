@@ -28,5 +28,6 @@ etc
 causal_data
 MNIST
 tmp_image_*
+celeba
 smile_linscm_supce
 age_linscm_supce
