@@ -458,7 +458,7 @@ def main():
     sample_efficiency = accuracy[0] / accuracy[1]
     if not os.path.exists('./assets/sample_efficiency/'): 
         os.makedirs('./assets/sample_efficiency/')
-    with open('./assets/sample_efficiency/{}_{}_{}.txt'.format(model_name, args["scm"], args['num']), 'w') as f:
+    with open('./assets/sample_efficiency/DEAR_{}_{}_{}.txt'.format(args["dataset"], args["prior"], args['num']), 'w') as f:
         f.write('100 samples accuracy: {:.3f}\n'.format(accuracy[0]))
         f.write('all samples accuracy: {:.3f}\n'.format(accuracy[1]))
         f.write('sample efficiency: {:.3f}\n'.format(sample_efficiency))
