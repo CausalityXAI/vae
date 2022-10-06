@@ -71,8 +71,12 @@ def get_args(debug):
 	parser.add_argument('--DR', default=False, type=bool, 
                      	help='If True, use dataset with spurious correlation')
 
-	parser.add_argument("--z_dim", default=16, type=int,
+	parser.add_argument("--z_dim", default=4, type=int,
                         help="the number of latent dimension")
+	parser.add_argument("--z1_dim", default=4, type=int,
+                        help="the number of latent 1 dimension")
+	parser.add_argument("--z2_dim", default=1, type=int,
+                        help="the number of latent 2 dimension")
 	parser.add_argument('--image_size', default=64, type=int,
 						help='width and heigh of image')
 
@@ -111,6 +115,9 @@ def train(dataloader, lvae, args, optimizer, device):
 
 		loss_ = []
 
+		# out = lvae.encode(u, l, sample=False)
+		# for x in out:
+		# 	print(x.shape)
 		L, kl, rec, mask, reconstructed_image, _ = lvae.negative_elbo_bound(u, l, sample = False)
 		dag_param = lvae.dag.A
 
@@ -135,7 +142,6 @@ def train(dataloader, lvae, args, optimizer, device):
 #%%
 def main():
     #%%
-    
 	args = vars(get_args(debug=False)) # default configuration
 	pprint(args)
 
@@ -149,7 +155,8 @@ def main():
 	if args["cuda"]:
 		torch.cuda.manual_seed(args["seed"])
 
-	lvae = CausalVAE(z_dim=args["z_dim"], device=device, image_size=args["image_size"]).to(device)
+	lvae = CausalVAE(z_dim=args["z_dim"], z1_dim=args["z1_dim"], z2_dim=args["z2_dim"], 
+                  	device=device, image_size=args["image_size"]).to(device)
 	optimizer = torch.optim.Adam(lvae.parameters(), 
 								lr=args["lr"], 
 								betas=(0.9, 0.999))

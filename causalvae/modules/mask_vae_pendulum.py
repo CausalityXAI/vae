@@ -41,9 +41,9 @@ class CausalVAE(nn.Module):
         self.dec = nns.Decoder_DAG(self.z_dim, self.z1_dim, self.z2_dim, image_size=self.image_size).to(device)
         self.dag = nns.DagLayer(self.z1_dim, self.z1_dim, i = inference).to(device)
         #self.cause = nn.CausalLayer(self.z_dim, self.z1_dim, self.z2_dim)
-        self.attn = nns.Attention(self.z1_dim).to(device)
+        self.attn = nns.Attention(self.z2_dim).to(device)
         self.mask_z = nns.MaskLayer(self.z_dim).to(device)
-        self.mask_u = nns.MaskLayer(self.z1_dim, z1_dim=1).to(device)
+        self.mask_u = nns.MaskLayer(self.z1_dim, z2_dim=1).to(device)
 
         # Set prior as fixed parameter attached to Module
         self.z_prior_m = nn.Parameter(torch.zeros(1).to(device), requires_grad=False)
