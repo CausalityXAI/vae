@@ -58,14 +58,14 @@ except:
 wandb.init(
     project="(causal)CausalVAE", 
     entity="anseunghwan",
-    tags=["EDA", "pendulum"],
+    tags=["Inference", "pendulum"],
 )
 #%%
 import argparse
 def get_args(debug):
 	parser = argparse.ArgumentParser('parameters')
  
-	parser.add_argument('--num', type=int, default=1, 
+	parser.add_argument('--num', type=int, default=4, 
 						help='model version')
 
 	if debug:
@@ -95,7 +95,8 @@ def main():
     if args["cuda"]:
         torch.cuda.manual_seed(args["seed"])
 
-    lvae = CausalVAE(z_dim=args["z_dim"], device=device, image_size=args["image_size"]).to(device)
+    lvae = CausalVAE(z_dim=args["z_dim"], z1_dim=args["z1_dim"], z2_dim=args["z2_dim"], 
+                  	device=device, image_size=args["image_size"]).to(device)
     if args["cuda"]:
         lvae.load_state_dict(torch.load(model_dir + '/model_{}.pth'.format('CausalVAE')))
     else:
@@ -147,25 +148,26 @@ def main():
     """intervention range"""
     decode_m_max = []
     decode_m_min = []
-    # e_tilde_max = []
-    # e_tilde_min = []
     f_z1_max = []
     f_z1_min = []
     for u, l in tqdm.tqdm(dataloader):
         if args["cuda"]:
             u = u.cuda()
             l = l.cuda()
-        _, _, decode_m, _, _, e_tilde, f_z1, _, _, _ = lvae.encode(u, l, sample=False)
-        decode_m_max.append(decode_m.max().detach().cpu().numpy())
-        decode_m_min.append(decode_m.min().detach().cpu().numpy())
-        # e_tilde_max.append(e_tilde.max().detach().cpu().numpy())
-        # e_tilde_min.append(e_tilde.min().detach().cpu().numpy())
-        f_z1_max.append(f_z1.max().detach().cpu().numpy())
-        f_z1_min.append(f_z1.min().detach().cpu().numpy())
-    decode_m_range = (min(decode_m_min), max(decode_m_max))
-    # e_tilde_range = (min(e_tilde_min), max(e_tilde_max))
-    f_z1_range = (min(f_z1_min), max(f_z1_max))
-    causal_range = [decode_m_range, f_z1_range]
+        _, _, decode_m, _, _, _, f_z1, _, _, _ = lvae.encode(u, l, sample=False)
+        decode_m_max.append(decode_m.squeeze(dim=-1).max(axis=0)[0])
+        decode_m_min.append(decode_m.squeeze(dim=-1).min(axis=0)[0])
+        f_z1_max.append(f_z1.squeeze(dim=-1).max(axis=0)[0])
+        f_z1_min.append(f_z1.squeeze(dim=-1).min(axis=0)[0])
+    decode_m_max = torch.vstack(decode_m_max).max(axis=0)[0]
+    decode_m_min = torch.vstack(decode_m_min).min(axis=0)[0]
+    f_z1_max = torch.vstack(f_z1_max).max(axis=0)[0]
+    f_z1_min = torch.vstack(f_z1_min).min(axis=0)[0]
+    
+    causal_range = [(decode_m_min[0].item(), decode_m_max[0].item()), 
+                    (decode_m_min[1].item(), decode_m_max[1].item()),
+                    (f_z1_min[2].item(), f_z1_max[2].item()), 
+                    (f_z1_min[3].item(), f_z1_max[3].item())]
     #%%
     """do-intervention"""
     dataloader = DataLoader(dataset, batch_size=1, shuffle=True)
@@ -181,12 +183,12 @@ def main():
     
     for i in range(4): # masking node index
         if i < 2:
-            for k, j in enumerate(np.linspace(causal_range[0][0], causal_range[0][1], 9)): # do-intervention value
+            for k, j in enumerate(np.linspace(causal_range[i][0], causal_range[i][1], 9)): # do-intervention value
                 _, _, _, _, reconstructed_image, _= lvae.negative_elbo_bound(u, l, i, sample = False, adj=j)
                 ax[i, k].imshow(torch.sigmoid(reconstructed_image[0]).detach().cpu().numpy())
                 ax[i, k].axis('off')    
         else:
-            for k, j in enumerate(np.linspace(causal_range[1][0], causal_range[1][1], 9)): # do-intervention value
+            for k, j in enumerate(np.linspace(causal_range[i][0], causal_range[i][1], 9)): # do-intervention value
                 _, _, _, _, reconstructed_image, _= lvae.negative_elbo_bound(u, l, i, sample = False, adj=j)
                 ax[i, k].imshow(torch.sigmoid(reconstructed_image[0]).detach().cpu().numpy())
                 ax[i, k].axis('off')    

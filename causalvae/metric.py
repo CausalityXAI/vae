@@ -35,10 +35,10 @@ import os
 import tqdm
 import pandas as pd
 
-from utils.util import _h_A
-import utils.util as ut
-from utils.mask_vae_pendulum import CausalVAE
-from utils.viz import (
+from modules.util import _h_A
+import modules.util as ut
+from modules.mask_vae_pendulum import CausalVAE
+from modules.viz import (
     viz_graph,
     viz_heatmap,
 )
@@ -65,9 +65,8 @@ wandb.init(
 import argparse
 def get_args(debug):
 	parser = argparse.ArgumentParser('parameters')
-	# parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
  
-	parser.add_argument('--num', type=int, default=0, 
+	parser.add_argument('--num', type=int, default=4, 
 						help='model version')
 
 	if debug:
@@ -97,7 +96,8 @@ def main():
     if args["cuda"]:
         torch.cuda.manual_seed(args["seed"])
 
-    lvae = CausalVAE(z_dim=args["z_dim"], device=device, image_size=args["image_size"]).to(device)
+    lvae = CausalVAE(z_dim=args["z_dim"], z1_dim=args["z1_dim"], z2_dim=args["z2_dim"], 
+                  	device=device, image_size=args["image_size"]).to(device)
     if args["cuda"]:
         lvae.load_state_dict(torch.load(model_dir + '/model_{}.pth'.format('CausalVAE')))
     else:
@@ -107,15 +107,21 @@ def main():
     """dataset"""
     class CustomDataset(Dataset): 
         def __init__(self, args):
-            train_imgs = [x for x in os.listdir('./utils/causal_data/pendulum/train') if x.endswith('png')]
+            if args["DR"]:
+                foldername = 'pendulum_DR'
+            else:
+                foldername = 'pendulum_real'
+                train_imgs = [x for x in os.listdir('./modules/causal_data/{}/train'.format(foldername)) if x.endswith('png')]
+
             train_x = []
             for i in tqdm.tqdm(range(len(train_imgs)), desc="train data loading"):
                 train_x.append(np.array(
-                    Image.open("./utils/causal_data/pendulum/train/{}".format(train_imgs[i])).resize((args["image_size"], args["image_size"]))
+                    Image.open("./modules/causal_data/{}/train/{}".format(foldername, train_imgs[i])).resize((args["image_size"], args["image_size"]))
                     )[:, :, :3])
             self.x_data = np.array(train_x).astype(float) / 255.
-            
+
             label = np.array([x[:-4].split('_')[1:] for x in train_imgs]).astype(float)
+            label = label[:, :4]
             self.std = label.std(axis=0)
             """label standardization"""
             if args["label_standardization"]: 
@@ -138,7 +144,7 @@ def main():
     """import baseline classifier"""
     artifact = wandb.use_artifact('anseunghwan/(proposal)CausalVAE/model_classifier:v{}'.format(0), type='model')
     model_dir = artifact.download()
-    from utils.model_classifier import Classifier
+    from modules.model_classifier import Classifier
     """masking"""
     # if args["dataset"] == 'pendulum':
     mask = []
@@ -172,42 +178,38 @@ def main():
     """intervention range"""
     decode_m_max = []
     decode_m_min = []
-    # e_tilde_max = []
-    # e_tilde_min = []
     f_z1_max = []
     f_z1_min = []
     for u, l in tqdm.tqdm(dataloader):
         if args["cuda"]:
             u = u.cuda()
             l = l.cuda()
-        
-        with torch.no_grad():
-            _, _, decode_m, _, _, e_tilde, f_z1, _, _, _ = lvae.encode(u, l, sample=False)
-            
-        decode_m_max.append(decode_m.max().detach().cpu().numpy())
-        decode_m_min.append(decode_m.min().detach().cpu().numpy())
-        # e_tilde_max.append(e_tilde.max().detach().cpu().numpy())
-        # e_tilde_min.append(e_tilde.min().detach().cpu().numpy())
-        f_z1_max.append(f_z1.max().detach().cpu().numpy())
-        f_z1_min.append(f_z1.min().detach().cpu().numpy())
-    decode_m_range = (min(decode_m_min), max(decode_m_max))
-    # e_tilde_range = (min(e_tilde_min), max(e_tilde_max))
-    f_z1_range = (min(f_z1_min), max(f_z1_max))
-    causal_range = [decode_m_range, f_z1_range]
+        _, _, decode_m, _, _, _, f_z1, _, _, _ = lvae.encode(u, l, sample=False)
+        decode_m_max.append(decode_m.squeeze(dim=-1).max(axis=0)[0])
+        decode_m_min.append(decode_m.squeeze(dim=-1).min(axis=0)[0])
+        f_z1_max.append(f_z1.squeeze(dim=-1).max(axis=0)[0])
+        f_z1_min.append(f_z1.squeeze(dim=-1).min(axis=0)[0])
+    decode_m_max = torch.vstack(decode_m_max).max(axis=0)[0]
+    decode_m_min = torch.vstack(decode_m_min).min(axis=0)[0]
+    f_z1_max = torch.vstack(f_z1_max).max(axis=0)[0]
+    f_z1_min = torch.vstack(f_z1_min).min(axis=0)[0]
+    
+    causal_range = [(decode_m_min[0].item(), decode_m_max[0].item()), 
+                    (decode_m_min[1].item(), decode_m_max[1].item()),
+                    (f_z1_min[2].item(), f_z1_max[2].item()), 
+                    (f_z1_min[3].item(), f_z1_max[3].item())]
     #%%
     """metric"""
     dim = 4
-    ACE_dict_lower = {x:[] for x in dataset.name}
-    ACE_dict_upper = {x:[] for x in dataset.name}
-    s = 'length'
-    c = 'light'
+    CDM_dict_lower = {x:[] for x in dataset.name}
+    CDM_dict_upper = {x:[] for x in dataset.name}
     for s in ['light', 'angle', 'length', 'position']:
         for c in ['light', 'angle', 'length', 'position']:
-            ACE_lower = 0
-            ACE_upper = 0
+            CDM_lower = 0
+            CDM_upper = 0
             
             dataloader = DataLoader(dataset, batch_size=args["batch_size"], shuffle=False)
-            for x_batch, y_batch in tqdm.tqdm(iter(dataloader)):
+            for x_batch, y_batch in tqdm.tqdm(iter(dataloader), desc="{} | {}".format(c, s)):
                 if args["cuda"]:
                     x_batch = x_batch.cuda()
                     y_batch = y_batch.cuda()
@@ -217,7 +219,7 @@ def main():
                 with torch.no_grad():
                     score = []
                     if do_index < 2:
-                        for val in [causal_range[0][0], causal_range[0][1]]:
+                        for val in [causal_range[do_index][0], causal_range[do_index][1]]:
                             _, _, _, _, reconstructed_image, _= lvae.negative_elbo_bound(u, l, do_index, sample = False, adj=torch.tensor(val))
                             reconstructed_image = torch.sigmoid(reconstructed_image)
                             
@@ -225,36 +227,40 @@ def main():
                             score.append(torch.sigmoid(classifier(reconstructed_image))[:, dataset.name.index(c)])
                             
                     else:
-                        for val in [causal_range[1][0], causal_range[1][1]]:
+                        for val in [causal_range[do_index][0], causal_range[do_index][1]]:
                             _, _, _, _, reconstructed_image, _= lvae.negative_elbo_bound(u, l, do_index, sample = False, adj=torch.tensor(val))
                             reconstructed_image = torch.sigmoid(reconstructed_image)
                             
                             """factor classification"""
                             score.append(torch.sigmoid(classifier(reconstructed_image))[:, dataset.name.index(c)])
                     
-                    ACE_lower += (score[0] - score[1]).sum()
-                    ACE_upper += (score[0] - score[1]).abs().sum()
+                    CDM_lower += (score[0] - score[1]).sum()
+                    CDM_upper += (score[0] - score[1]).abs().sum()
                     
-            ACE_lower /= dataset.__len__()
-            ACE_upper /= dataset.__len__()
-            ACE_dict_lower[s] = ACE_dict_lower.get(s) + [(c, ACE_lower.abs().item())]
-            ACE_dict_upper[s] = ACE_dict_upper.get(s) + [(c, ACE_upper.item())]
+            CDM_lower /= dataset.__len__()
+            CDM_upper /= dataset.__len__()
+            CDM_dict_lower[s] = CDM_dict_lower.get(s) + [(c, CDM_lower.abs().item())]
+            CDM_dict_upper[s] = CDM_dict_upper.get(s) + [(c, CDM_upper.item())]
     #%%
-    ACE_mat_lower = np.zeros((dim, dim))
+    CDM_mat_lower = np.zeros((dim, dim))
     for i, c in enumerate(dataset.name):
-        ACE_mat_lower[i, :] = [x[1] for x in ACE_dict_lower[c]]
-    ACE_mat_upper = np.zeros((dim, dim))
+        CDM_mat_lower[i, :] = [x[1] for x in CDM_dict_lower[c]]
+    CDM_mat_upper = np.zeros((dim, dim))
     for i, c in enumerate(dataset.name):
-        ACE_mat_upper[i, :] = [x[1] for x in ACE_dict_upper[c]]
+        CDM_mat_upper[i, :] = [x[1] for x in CDM_dict_upper[c]]
     
-    fig = viz_heatmap(np.flipud(ACE_mat_lower), size=(7, 7))
-    wandb.log({'ACE(lower)': wandb.Image(fig)})
-    fig = viz_heatmap(np.flipud(ACE_mat_upper), size=(7, 7))
-    wandb.log({'ACE(upper)': wandb.Image(fig)})
+    fig = viz_heatmap(np.flipud(CDM_mat_lower), size=(7, 7))
+    wandb.log({'CDM(lower)': wandb.Image(fig)})
+    fig = viz_heatmap(np.flipud(CDM_mat_upper), size=(7, 7))
+    wandb.log({'CDM(upper)': wandb.Image(fig)})
     
+    if not os.path.exists('./assets/CDM/'): 
+        os.makedirs('./assets/CDM/')
     # save as csv
-    pd.DataFrame(ACE_mat_lower.round(3), columns=dataset.name, index=dataset.name).to_csv('./assets/ACE_lower_causalvae.csv')
-    pd.DataFrame(ACE_mat_upper.round(3), columns=dataset.name, index=dataset.name).to_csv('./assets/ACE_upper_causalvae.csv')
+    df = pd.DataFrame(CDM_mat_lower.round(3), columns=dataset.name[:4], index=dataset.name[:4])
+    df.to_csv('./assets/CDM/lower_{}_{}.csv'.format('CausalVAE', args['num']))
+    df = pd.DataFrame(CDM_mat_upper.round(3), columns=dataset.name[:4], index=dataset.name[:4])
+    df.to_csv('./assets/CDM/upper_{}_{}.csv'.format('CausalVAE', args['num']))
     #%%
     wandb.run.finish()
 #%%

@@ -23,6 +23,7 @@ from torchvision import transforms
 from torchvision.utils import save_image
 from torch.utils.data import Dataset
 from torch.utils.data import TensorDataset, DataLoader
+import torch.nn.functional as F
 
 import numpy as np
 import math
@@ -41,6 +42,9 @@ from modules.viz import (
     viz_graph,
     viz_heatmap,
 )
+from modules.model_downstream import (
+    Classifier
+)
 
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
 #%%
@@ -58,14 +62,14 @@ except:
 wandb.init(
     project="(causal)CausalVAE", 
     entity="anseunghwan",
-    tags=["EDA", "pendulum"],
+    tags=["SampleEfficiency", "pendulum"],
 )
 #%%
 import argparse
 def get_args(debug):
 	parser = argparse.ArgumentParser('parameters')
  
-	parser.add_argument('--num', type=int, default=1, 
+	parser.add_argument('--num', type=int, default=4, 
 						help='model version')
 
 	if debug:
@@ -95,7 +99,8 @@ def main():
     if args["cuda"]:
         torch.cuda.manual_seed(args["seed"])
 
-    lvae = CausalVAE(z_dim=args["z_dim"], device=device, image_size=args["image_size"]).to(device)
+    lvae = CausalVAE(z_dim=args["z_dim"], z1_dim=args["z1_dim"], z2_dim=args["z2_dim"], 
+                  	device=device, image_size=args["image_size"]).to(device)
     if args["cuda"]:
         lvae.load_state_dict(torch.load(model_dir + '/model_{}.pth'.format('CausalVAE')))
     else:
@@ -118,12 +123,33 @@ def main():
             self.x_data = np.array(train_x).astype(float) / 255.
 
             label = np.array([x[:-4].split('_')[1:] for x in train_imgs]).astype(float)
-            label = label[:, :4]
-            self.std = label.std(axis=0)
-            """label standardization"""
-            if args["label_standardization"]: 
-                label -= label.mean(axis=0)
-                label /= label.std(axis=0)
+            self.y_data = label
+            self.name = ['light', 'angle', 'length', 'position']
+
+        def __len__(self): 
+            return len(self.x_data)
+
+        def __getitem__(self, idx): 
+            x = torch.FloatTensor(self.x_data[idx])
+            y = torch.FloatTensor(self.y_data[idx])
+            return x, y
+    
+    class TestDataset(Dataset): 
+        def __init__(self, args):
+            if args["DR"]:
+                foldername = 'pendulum_DR'
+            else:
+                foldername = 'pendulum_real'
+                test_imgs = [x for x in os.listdir('./modules/causal_data/{}/test'.format(foldername)) if x.endswith('png')]
+
+            test_x = []
+            for i in tqdm.tqdm(range(len(test_imgs)), desc="test data loading"):
+                test_x.append(np.array(
+                    Image.open("./modules/causal_data/{}/test/{}".format(foldername, test_imgs[i])).resize((args["image_size"], args["image_size"]))
+                    )[:, :, :3])
+            self.x_data = np.array(test_x).astype(float) / 255.
+
+            label = np.array([x[:-4].split('_')[1:] for x in test_imgs]).astype(float)
             self.y_data = label
             self.name = ['light', 'angle', 'length', 'position']
 
@@ -136,66 +162,247 @@ def main():
             return x, y
     
     dataset = CustomDataset(args)
-    dataloader = DataLoader(dataset, batch_size=args["batch_size"], shuffle=True)
+    test_dataset = TestDataset(args)
     #%%
-    """estimated causal matrix"""
-    print('DAG:{}'.format(lvae.dag.A))
-    B_est = lvae.dag.A.detach().cpu().numpy()
-    fig = viz_heatmap(np.flipud(B_est), size=(7, 7))
-    wandb.log({'B_est': wandb.Image(fig)})
-    #%%
-    """intervention range"""
-    decode_m_max = []
-    decode_m_min = []
-    # e_tilde_max = []
-    # e_tilde_min = []
-    f_z1_max = []
-    f_z1_min = []
-    for u, l in tqdm.tqdm(dataloader):
-        if args["cuda"]:
-            u = u.cuda()
-            l = l.cuda()
-        _, _, decode_m, _, _, e_tilde, f_z1, _, _, _ = lvae.encode(u, l, sample=False)
-        decode_m_max.append(decode_m.max().detach().cpu().numpy())
-        decode_m_min.append(decode_m.min().detach().cpu().numpy())
-        # e_tilde_max.append(e_tilde.max().detach().cpu().numpy())
-        # e_tilde_min.append(e_tilde.min().detach().cpu().numpy())
-        f_z1_max.append(f_z1.max().detach().cpu().numpy())
-        f_z1_min.append(f_z1.min().detach().cpu().numpy())
-    decode_m_range = (min(decode_m_min), max(decode_m_max))
-    # e_tilde_range = (min(e_tilde_min), max(e_tilde_max))
-    f_z1_range = (min(f_z1_min), max(f_z1_max))
-    causal_range = [decode_m_range, f_z1_range]
-    #%%
-    """do-intervention"""
+    """with 100 size of training dataset"""
     dataloader = DataLoader(dataset, batch_size=1, shuffle=True)
-    iter_test = iter(dataloader)
-    count = 1
-    for _ in range(count):
-        u, l = next(iter_test)
-    if args["cuda"]:
-        u = u.cuda()
-        l = l.cuda()
+    targets_100 = []
+    representations_100 = []
+    for count, (x_batch, y_batch) in tqdm.tqdm(enumerate(iter(dataloader))):
+        if args["cuda"]:
+            x_batch = x_batch.cuda()
+            y_batch = y_batch.cuda()
+        
+        with torch.no_grad():
+            _, _, _, _, _, _, f_z1, _, _, _ = lvae.encode(x_batch, y_batch[:, :4], sample=False)
+            
+        targets_100.append(y_batch)
+        representations_100.append(f_z1.squeeze(dim=-1))
+        
+        count += 1
+        if count == 100: break
+    targets_100 = torch.cat(targets_100, dim=0)
+    targets_100 = targets_100[:, [-1]]
+    representations_100 = torch.cat(representations_100, dim=0)
     
-    fig, ax = plt.subplots(4, 9, figsize=(10, 4))
+    downstream_dataset_100 = TensorDataset(representations_100, targets_100)
+    downstream_dataloader_100 = DataLoader(downstream_dataset_100, batch_size=32, shuffle=True)
+    #%%
+    """with all training dataset"""
+    dataloader = DataLoader(dataset, batch_size=64, shuffle=True)
+    targets = []
+    representations = []
+    for x_batch, y_batch in tqdm.tqdm(iter(dataloader)):
+        if args["cuda"]:
+            x_batch = x_batch.cuda()
+            y_batch = y_batch.cuda()
+        
+        with torch.no_grad():
+            _, _, _, _, _, _, f_z1, _, _, _ = lvae.encode(x_batch, y_batch[:, :4], sample=False)
+        targets.append(y_batch)
+        representations.append(f_z1.squeeze(dim=-1))
+        
+    targets = torch.cat(targets, dim=0)
+    targets = targets[:, [-1]]
+    representations = torch.cat(representations, dim=0)
     
-    for i in range(4): # masking node index
-        if i < 2:
-            for k, j in enumerate(np.linspace(causal_range[0][0], causal_range[0][1], 9)): # do-intervention value
-                _, _, _, _, reconstructed_image, _= lvae.negative_elbo_bound(u, l, i, sample = False, adj=j)
-                ax[i, k].imshow(torch.sigmoid(reconstructed_image[0]).detach().cpu().numpy())
-                ax[i, k].axis('off')    
-        else:
-            for k, j in enumerate(np.linspace(causal_range[1][0], causal_range[1][1], 9)): # do-intervention value
-                _, _, _, _, reconstructed_image, _= lvae.negative_elbo_bound(u, l, i, sample = False, adj=j)
-                ax[i, k].imshow(torch.sigmoid(reconstructed_image[0]).detach().cpu().numpy())
-                ax[i, k].axis('off')    
+    downstream_dataset = TensorDataset(representations, targets)
+    downstream_dataloader = DataLoader(downstream_dataset, batch_size=64, shuffle=True)
+    #%%
+    """test dataset"""
+    test_dataloader = DataLoader(test_dataset, batch_size=64, shuffle=True)
+    test_targets = []
+    test_representations = []
+    for x_batch, y_batch in tqdm.tqdm(iter(test_dataloader)):
+        if args["cuda"]:
+            x_batch = x_batch.cuda()
+            y_batch = y_batch.cuda()
+        
+        with torch.no_grad():
+            _, _, _, _, _, _, f_z1, _, _, _ = lvae.encode(x_batch, y_batch[:, :4], sample=False)
+        test_targets.append(y_batch)
+        test_representations.append(f_z1.squeeze(dim=-1))
+        
+    test_targets = torch.cat(test_targets, dim=0)
+    test_targets = test_targets[:, [-1]]
+    test_representations = torch.cat(test_representations, dim=0)
     
-    plt.savefig('{}/do.png'.format(model_dir), bbox_inches='tight')
-    # plt.show()
-    plt.close()
+    test_downstream_dataset = TensorDataset(test_representations, test_targets)
+    test_downstream_dataloader = DataLoader(test_downstream_dataset, batch_size=64, shuffle=True)
+    #%%
+    accuracy = []
+    # accuracy_100 = []
+    # for _ in range(10): # repeated experiments
     
-    wandb.log({'do intervention ({})'.format(', '.join(dataset.name)): wandb.Image(fig)})
+    print("Sample Efficiency with 100 labels")
+    downstream_classifier_100 = Classifier(args['z_dim'], device)
+    downstream_classifier_100 = downstream_classifier_100.to(device)
+    
+    optimizer = torch.optim.Adam(
+        downstream_classifier_100.parameters(), 
+        lr=0.005
+    )
+    
+    downstream_classifier_100.train()
+    
+    for epoch in range(100):
+        logs = {
+            'loss': [], 
+        }
+        
+        for (x_batch, y_batch) in iter(downstream_dataloader_100):
+            
+            if args["cuda"]:
+                x_batch = x_batch.cuda()
+                y_batch = y_batch.cuda()
+            
+            # with torch.autograd.set_detect_anomaly(True):    
+            optimizer.zero_grad()
+            
+            pred = downstream_classifier_100(x_batch)
+            loss = F.binary_cross_entropy(pred, y_batch, reduction='none').mean()
+            
+            loss_ = []
+            loss_.append(('loss', loss))
+            
+            loss.backward()
+            optimizer.step()
+                
+            """accumulate losses"""
+            for x, y in loss_:
+                logs[x] = logs.get(x) + [y.item()]
+        
+        # accuracy
+        with torch.no_grad():
+            """train accuracy"""
+            train_correct = 0
+            for (x_batch, y_batch) in iter(downstream_dataloader_100):
+                
+                if args["cuda"]:
+                    x_batch = x_batch.cuda()
+                    y_batch = y_batch.cuda()
+                
+                pred = downstream_classifier_100(x_batch)
+                pred = (pred > 0.5).float()
+                train_correct += (pred == y_batch).float().sum().item()
+            train_correct /= downstream_dataset_100.__len__()
+            
+            """test accuracy"""
+            test_correct = 0
+            for (x_batch, y_batch) in iter(test_downstream_dataloader):
+                
+                if args["cuda"]:
+                    x_batch = x_batch.cuda()
+                    y_batch = y_batch.cuda()
+                
+                pred = downstream_classifier_100(x_batch)
+                pred = (pred > 0.5).float()
+                test_correct += (pred == y_batch).float().sum().item()
+            test_correct /= test_downstream_dataset.__len__()
+        
+        print_input = "[epoch {:03d}]".format(epoch + 1)
+        print_input += ''.join([', {}: {:.4f}'.format(x, np.mean(y).round(2)) for x, y in logs.items()])
+        print_input += ', TrainACC: {:.2f}%'.format(train_correct * 100)
+        print_input += ', TestACC: {:.2f}%'.format(test_correct * 100)
+        print(print_input)
+        
+        wandb.log({x : np.mean(y) for x, y in logs.items()})
+        wandb.log({'TrainACC(%)_100samples' : train_correct * 100})
+        wandb.log({'TestACC(%)_100samples' : test_correct * 100})
+        
+    # # log accuracy
+    # accuracy_100.append(test_correct)
+    accuracy.append(test_correct)
+    #%%
+    print()
+    print("Sample Efficiency with all labels")
+    downstream_classifier = Classifier(args['z_dim'], device)
+    downstream_classifier = downstream_classifier.to(device)
+    
+    optimizer = torch.optim.Adam(
+        downstream_classifier.parameters(), 
+        lr=0.005
+    )
+    
+    downstream_classifier.train()
+    
+    for epoch in range(100):
+        logs = {
+            'loss': [], 
+        }
+        
+        for (x_batch, y_batch) in iter(downstream_dataloader):
+            
+            if args["cuda"]:
+                x_batch = x_batch.cuda()
+                y_batch = y_batch.cuda()
+            
+            # with torch.autograd.set_detect_anomaly(True):    
+            optimizer.zero_grad()
+            
+            pred = downstream_classifier(x_batch)
+            loss = F.binary_cross_entropy(pred, y_batch, reduction='none').mean()
+            
+            loss_ = []
+            loss_.append(('loss', loss))
+            
+            loss.backward()
+            optimizer.step()
+                
+            """accumulate losses"""
+            for x, y in loss_:
+                logs[x] = logs.get(x) + [y.item()]
+        
+        # accuracy
+        with torch.no_grad():
+            """train accuracy"""
+            train_correct = 0
+            for (x_batch, y_batch) in iter(downstream_dataloader):
+                
+                if args["cuda"]:
+                    x_batch = x_batch.cuda()
+                    y_batch = y_batch.cuda()
+                
+                pred = downstream_classifier(x_batch)
+                pred = (pred > 0.5).float()
+                train_correct += (pred == y_batch).float().sum().item()
+            train_correct /= downstream_dataset.__len__()
+            
+            """test accuracy"""
+            test_correct = 0
+            for (x_batch, y_batch) in iter(test_downstream_dataloader):
+                
+                if args["cuda"]:
+                    x_batch = x_batch.cuda()
+                    y_batch = y_batch.cuda()
+                
+                pred = downstream_classifier(x_batch)
+                pred = (pred > 0.5).float()
+                test_correct += (pred == y_batch).float().sum().item()
+            test_correct /= test_downstream_dataset.__len__()
+        
+        print_input = "[epoch {:03d}]".format(epoch + 1)
+        print_input += ''.join([', {}: {:.4f}'.format(x, np.mean(y).round(2)) for x, y in logs.items()])
+        print_input += ', TrainACC: {:.2f}%'.format(train_correct * 100)
+        print_input += ', TestACC: {:.2f}%'.format(test_correct * 100)
+        print(print_input)
+        
+        wandb.log({x : np.mean(y) for x, y in logs.items()})
+        wandb.log({'TrainACC(%)' : train_correct * 100})
+        wandb.log({'TestACC(%)' : test_correct * 100})
+            
+    # # log accuracy
+    # accuracy.append(test_correct)
+    accuracy.append(test_correct)
+    #%%
+    """log Accuracy"""
+    sample_efficiency = accuracy[0] / accuracy[1]
+    if not os.path.exists('./assets/sample_efficiency/'): 
+        os.makedirs('./assets/sample_efficiency/')
+    with open('./assets/sample_efficiency/{}_{}.txt'.format('CausalVAE', args['num']), 'w') as f:
+        f.write('100 samples accuracy: {:.3f}\n'.format(accuracy[0]))
+        f.write('all samples accuracy: {:.3f}\n'.format(accuracy[1]))
+        f.write('sample efficiency: {:.3f}\n'.format(sample_efficiency))
     #%%
     wandb.run.finish()
 #%%
