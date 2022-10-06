@@ -22,11 +22,11 @@ import numpy as np
 import matplotlib.pyplot as plt
 import pandas as pd
 
-import utils
-from utils.model import *
-from utils.sagan import *
-from utils.causal_model import *
-from utils.viz import (
+import modules
+from modules.model import *
+from modules.sagan import *
+from modules.causal_model import *
+from modules.viz import (
     viz_graph,
     viz_heatmap,
 )
@@ -52,7 +52,7 @@ import argparse
 def get_args(debug):
 	parser = argparse.ArgumentParser('parameters')
  
-	parser.add_argument('--num', type=int, default=2, 
+	parser.add_argument('--num', type=int, default=0, 
 						help='model version')
 
 	if debug:
@@ -76,10 +76,7 @@ def main():
     args = vars(get_args(debug=True))
     args["dataset"] = "pendulum"
     
-    if args["dataset"] == "celeba":
-        artifact = wandb.use_artifact('anseunghwan/(causal)DEAR/model_{}:v{}'.format(args["dataset"], args["num"]), type='model')
-    else:
-        artifact = wandb.use_artifact('anseunghwan/(causal)DEAR/model:v{}'.format(args["num"]), type='model')
+    artifact = wandb.use_artifact('anseunghwan/(causal)DEAR/model_{}:v{}'.format(args["dataset"], args["num"]), type='model')
     for key, item in artifact.metadata.items():
         args[key] = item
     args["cuda"] = torch.cuda.is_available()
@@ -107,16 +104,21 @@ def main():
     if args["dataset"] == "pendulum":
         class CustomDataset(Dataset): 
             def __init__(self, args):
-                train_imgs = [x for x in os.listdir('./utils/causal_data/pendulum/train') if x.endswith('png')]
+                if args["DR"]:
+                    foldername = 'pendulum_DR'
+                else:
+                    foldername = 'pendulum_real'
+                train_imgs = [x for x in os.listdir('./modules/causal_data/{}/train'.format(foldername)) if x.endswith('png')]
                 train_x = []
                 for i in tqdm.tqdm(range(len(train_imgs)), desc="train data loading"):
                     train_x.append(np.transpose(
                         np.array(
-                        Image.open("./utils/causal_data/pendulum/train/{}".format(train_imgs[i])).resize((args["image_size"], args["image_size"]))
+                        Image.open("./modules/causal_data/{}/train/{}".format(foldername, train_imgs[i])).resize((args["image_size"], args["image_size"]))
                         )[:, :, :3], (2, 0, 1)))
                 self.x_data = (np.array(train_x).astype(float) - 127.5) / 127.5
                 
                 label = np.array([x[:-4].split('_')[1:] for x in train_imgs]).astype(float)
+                label = label[:, :4]
                 label = label - label.mean(axis=0)
                 self.std = label.std(axis=0)
                 """bounded label: normalize to (0, 1)"""
@@ -184,23 +186,16 @@ def main():
         A
     )
     if args["cuda"]:
-        if args["dataset"] == "celeba":
-            model.load_state_dict(torch.load(model_dir + '/model_{}.pth'.format(args["dataset"])))
-        else:
-            model.load_state_dict(torch.load(model_dir + '/model.pth'))
+        model.load_state_dict(torch.load(model_dir + '/model_{}.pth'.format(args["dataset"])))
         model = model.to(device)
     else:
-        if args["dataset"] == "celeba":
-            model.load_state_dict(torch.load(model_dir + '/model_{}.pth'.format(args["dataset"]), 
-                                            map_location=torch.device('cpu')))
-        else:
-            model.load_state_dict(torch.load(model_dir + '/model.pth', 
-                                            map_location=torch.device('cpu')))
+        model.load_state_dict(torch.load(model_dir + '/model_{}.pth'.format(args["dataset"]), 
+                                        map_location=torch.device('cpu')))
     #%%
     """import baseline classifier"""
     artifact = wandb.use_artifact('anseunghwan/(proposal)CausalVAE/model_classifier:v{}'.format(0), type='model')
     model_dir = artifact.download()
-    from utils.model_classifier import Classifier
+    from modules.model_classifier import Classifier
     """masking"""
     # if args["dataset"] == 'pendulum':
     mask = []
@@ -249,17 +244,15 @@ def main():
     #%%
     """metric"""
     dim = 4
-    ACE_dict_lower = {x:[] for x in dataset.name}
-    ACE_dict_upper = {x:[] for x in dataset.name}
-    s = 'length'
-    c = 'light'
+    CDM_dict_lower = {x:[] for x in dataset.name}
+    CDM_dict_upper = {x:[] for x in dataset.name}
     for s in ['light', 'angle', 'length', 'position']:
         for c in ['light', 'angle', 'length', 'position']:
-            ACE_lower = 0
-            ACE_upper = 0
+            CDM_lower = 0
+            CDM_upper = 0
             
             dataloader = DataLoader(dataset, batch_size=args["batch_size"], shuffle=False) 
-            for x_batch, y_batch in tqdm.tqdm(iter(dataloader)):
+            for x_batch, y_batch in tqdm.tqdm(iter(dataloader), desc="{} | {}".format(c, s)):
                 if args["cuda"]:
                     x_batch = x_batch.cuda()
                     y_batch = y_batch.cuda()
@@ -294,29 +287,33 @@ def main():
                         """factor classification"""
                         score.append(torch.sigmoid(classifier(xhat))[:, dataset.name.index(c)])
                     
-                    ACE_lower += (score[0] - score[1]).sum()
-                    ACE_upper += (score[0] - score[1]).abs().sum()
+                    CDM_lower += (score[0] - score[1]).sum()
+                    CDM_upper += (score[0] - score[1]).abs().sum()
                     
-            ACE_lower /= dataset.__len__()
-            ACE_upper /= dataset.__len__()
-            ACE_dict_lower[s] = ACE_dict_lower.get(s) + [(c, ACE_lower.abs().item())]
-            ACE_dict_upper[s] = ACE_dict_upper.get(s) + [(c, ACE_upper.item())]
+            CDM_lower /= dataset.__len__()
+            CDM_upper /= dataset.__len__()
+            CDM_dict_lower[s] = CDM_dict_lower.get(s) + [(c, CDM_lower.abs().item())]
+            CDM_dict_upper[s] = CDM_dict_upper.get(s) + [(c, CDM_upper.item())]
     #%%
-    ACE_mat_lower = np.zeros((dim, dim))
+    CDM_mat_lower = np.zeros((dim, dim))
     for i, c in enumerate(dataset.name):
-        ACE_mat_lower[i, :] = [x[1] for x in ACE_dict_lower[c]]
-    ACE_mat_upper = np.zeros((dim, dim))
+        CDM_mat_lower[i, :] = [x[1] for x in CDM_dict_lower[c]]
+    CDM_mat_upper = np.zeros((dim, dim))
     for i, c in enumerate(dataset.name):
-        ACE_mat_upper[i, :] = [x[1] for x in ACE_dict_upper[c]]
+        CDM_mat_upper[i, :] = [x[1] for x in CDM_dict_upper[c]]
     
-    fig = viz_heatmap(np.flipud(ACE_mat_lower), size=(7, 7))
-    wandb.log({'ACE(lower)': wandb.Image(fig)})
-    fig = viz_heatmap(np.flipud(ACE_mat_upper), size=(7, 7))
-    wandb.log({'ACE(upper)': wandb.Image(fig)})
+    fig = viz_heatmap(np.flipud(CDM_mat_lower), size=(7, 7))
+    wandb.log({'CDM(lower)': wandb.Image(fig)})
+    fig = viz_heatmap(np.flipud(CDM_mat_upper), size=(7, 7))
+    wandb.log({'CDM(upper)': wandb.Image(fig)})
     
+    if not os.path.exists('./assets/CDM/'): 
+        os.makedirs('./assets/CDM/')
     # save as csv
-    pd.DataFrame(ACE_mat_lower.round(3), columns=dataset.name, index=dataset.name).to_csv('./assets/ACE_lower_dear.csv')
-    pd.DataFrame(ACE_mat_upper.round(3), columns=dataset.name, index=dataset.name).to_csv('./assets/ACE_upper_dear.csv')
+    df = pd.DataFrame(CDM_mat_lower.round(3), columns=dataset.name[:4], index=dataset.name[:4])
+    df.to_csv('./assets/CDM/lower_{}_{}_{}.csv'.format('DEAR', args["prior"], args['num']))
+    df = pd.DataFrame(CDM_mat_upper.round(3), columns=dataset.name[:4], index=dataset.name[:4])
+    df.to_csv('./assets/CDM/upper_{}_{}_{}.csv'.format('DEAR', args["prior"], args['num']))
     #%%
     wandb.run.finish()
 #%%
