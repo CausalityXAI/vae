@@ -44,7 +44,7 @@ except:
 wandb.init(
     project="(causal)DEAR", 
     entity="anseunghwan",
-    tags=["fully_supervised", "pendulum", "EDA"],
+    tags=["fully_supervised", "pendulum", "Inference"],
 )
 #%%
 import argparse
