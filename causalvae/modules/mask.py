@@ -57,32 +57,32 @@ def dag_left_linear(input, weight, bias=None):
     return ret
 #%%
 class MaskLayer(nn.Module):
-	def __init__(self, z_dim, concept=4, z1_dim=4):
+	def __init__(self, z_dim, concept=4, z2_dim=1):
 		super().__init__()
 		self.z_dim = z_dim
-		self.z1_dim = z1_dim
+		self.z2_dim = z2_dim
 		self.concept = concept
 		
 		self.elu = nn.ELU()
 		self.net1 = nn.Sequential(
-			nn.Linear(z1_dim , 32),
+			nn.Linear(z2_dim , 32),
 			nn.ELU(),
-			nn.Linear(32, z1_dim),
+			nn.Linear(32, z2_dim),
 		)
 		self.net2 = nn.Sequential(
-			nn.Linear(z1_dim , 32),
+			nn.Linear(z2_dim , 32),
 			nn.ELU(),
-			nn.Linear(32, z1_dim),
+			nn.Linear(32, z2_dim),
 		)
 		self.net3 = nn.Sequential(
-			nn.Linear(z1_dim , 32),
+			nn.Linear(z2_dim , 32),
 			nn.ELU(),
-		  nn.Linear(32, z1_dim),
+		  nn.Linear(32, z2_dim),
 		)
 		self.net4 = nn.Sequential(
-			nn.Linear(z1_dim , 32),
+			nn.Linear(z2_dim , 32),
 			nn.ELU(),
-			nn.Linear(32, z1_dim)
+			nn.Linear(32, z2_dim)
 		)
 		self.net = nn.Sequential(
 			nn.Linear(z_dim , 32),
@@ -100,8 +100,8 @@ class MaskLayer(nn.Module):
 		return z
    
 	def mix(self, z):
-		zy = z.view(-1, self.concept * self.z1_dim)
-		if self.z1_dim == 1:
+		zy = z.view(-1, self.concept * self.z2_dim)
+		if self.z2_dim == 1:
 			zy = zy.reshape(zy.size()[0],zy.size()[1],1)
 			if self.concept ==4:
 				zy1, zy2, zy3, zy4= zy[:,0],zy[:,1],zy[:,2],zy[:,3]
