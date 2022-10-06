@@ -83,7 +83,7 @@ def get_args(debug):
 	parser.add_argument("--label_standardization", default=True, type=bool,
                         help="If True, normalize additional information label data")
  
-	parser.add_argument('--epochs', default=100, type=int,
+	parser.add_argument('--epochs', default=150, type=int,
 						help='maximum iteration')
 	parser.add_argument('--batch_size', default=128, type=int,
 						help='batch size')
