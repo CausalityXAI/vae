@@ -99,62 +99,6 @@ def main():
     global device
     device = torch.device('cuda:0') if torch.cuda.is_available() else torch.device('cpu')
     #%%
-    """dataset"""
-    if args["dataset"] == "pendulum":
-        class CustomDataset(Dataset): 
-            def __init__(self, args):
-                if args["DR"]:
-                    foldername = 'pendulum_DR'
-                else:
-                    foldername = 'pendulum_real'
-                train_imgs = [x for x in os.listdir('./modules/causal_data/{}/train'.format(foldername)) if x.endswith('png')]
-                train_x = []
-                for i in tqdm.tqdm(range(len(train_imgs)), desc="train data loading"):
-                    train_x.append(np.transpose(
-                        np.array(
-                        Image.open("./modules/causal_data/{}/train/{}".format(foldername, train_imgs[i])).resize((args["image_size"], args["image_size"]))
-                        )[:, :, :3], (2, 0, 1)))
-                self.x_data = (np.array(train_x).astype(float) - 127.5) / 127.5
-                
-                label = np.array([x[:-4].split('_')[1:] for x in train_imgs]).astype(float)
-                label = label[:, :4]
-                label = label - label.mean(axis=0)
-                self.std = label.std(axis=0)
-                """bounded label: normalize to (0, 1)"""
-                if args["sup_type"] == 'ce': 
-                    label = (label - label.min(axis=0)) / (label.max(axis=0) - label.min(axis=0))
-                elif args["sup_type"] == 'l2': 
-                    label = (label - label.mean(axis=0)) / label.std(axis=0)
-                self.y_data = label
-                self.name = ['light', 'angle', 'length', 'position']
-
-            def __len__(self): 
-                return len(self.x_data)
-
-            def __getitem__(self, idx): 
-                x = torch.FloatTensor(self.x_data[idx])
-                y = torch.FloatTensor(self.y_data[idx])
-                return x, y
-        
-        dataset = CustomDataset(args)
-        train_loader = DataLoader(dataset, batch_size=args["batch_size"], shuffle=True)
-    
-    elif args["dataset"] == "celeba": 
-        train_loader = None
-        trans_f = transforms.Compose([
-            transforms.CenterCrop(128),
-            transforms.Resize((args["image_size"], args["image_size"])),
-            transforms.ToTensor(),
-            transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
-        ])
-        data_dir = './utils/causal_data/celeba'
-        if not os.path.exists(data_dir): 
-            os.makedirs(data_dir)
-        train_set = datasets.CelebA(data_dir, split='train', download=True, transform=trans_f)
-        train_loader = torch.utils.data.DataLoader(train_set, batch_size=args["batch_size"], 
-                                                    shuffle=True, pin_memory=False,
-                                                    drop_last=True, num_workers=0)
-    #%%
     if 'scm' in args["prior"]:
         A = torch.zeros((num_label, num_label))
         if args["labels"] == 'smile':
@@ -245,7 +189,8 @@ def main():
     # plt.show()
     plt.close()
     
-    wandb.log({'do intervention ({})'.format(', '.join(dataset.name)): wandb.Image(fig)})
+    name = ['light', 'angle', 'length', 'position']
+    wandb.log({'do intervention ({})'.format(', '.join(name)): wandb.Image(fig)})
     #%%
     wandb.run.finish()
 #%%
