@@ -357,7 +357,7 @@ def main():
             wandb.log({'TrainACC(%)_100samples' : train_correct * 100})
             wandb.log({'TestACC(%)_100samples' : test_correct * 100})
         
-        print_input = "[epoch {:03d}]".format(epoch + 1)
+        print_input = "[Repeat {:02d}]".format(repeat_num + 1)
         print_input += ''.join([', {}: {:.4f}'.format(x, np.mean(y).round(2)) for x, y in logs.items()])
         print_input += ', TrainACC: {:.2f}%'.format(train_correct * 100)
         print_input += ', TestACC: {:.2f}%'.format(test_correct * 100)
@@ -436,7 +436,7 @@ def main():
             wandb.log({'TrainACC(%)' : train_correct * 100})
             wandb.log({'TestACC(%)' : test_correct * 100})
         
-        print_input = "[epoch {:03d}]".format(epoch + 1)
+        print_input = "[Repeat {:02d}]".format(repeat_num + 1)
         print_input += ''.join([', {}: {:.4f}'.format(x, np.mean(y).round(2)) for x, y in logs.items()])
         print_input += ', TrainACC: {:.2f}%'.format(train_correct * 100)
         print_input += ', TestACC: {:.2f}%'.format(test_correct * 100)
