@@ -68,8 +68,6 @@ def get_args(debug):
  
 	parser.add_argument('--seed', type=int, default=1, 
 						help='seed for repeatable results')
-	parser.add_argument('--DR', default=False, type=bool, 
-                     	help='If True, use dataset with spurious correlation')
 
 	parser.add_argument("--z_dim", default=4, type=int,
                         help="the number of latent dimension")
@@ -164,10 +162,7 @@ def main():
 	"""dataset"""
 	class CustomDataset(Dataset): 
 		def __init__(self, args):
-			if args["DR"]:
-				foldername = 'pendulum_DR'
-			else:
-				foldername = 'pendulum_real'
+			foldername = 'pendulum_real'
 			train_imgs = [x for x in os.listdir('./modules/causal_data/{}/train'.format(foldername)) if x.endswith('png')]
    
 			train_x = []

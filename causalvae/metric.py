@@ -107,11 +107,8 @@ def main():
     """dataset"""
     class CustomDataset(Dataset): 
         def __init__(self, args):
-            if args["DR"]:
-                foldername = 'pendulum_DR'
-            else:
-                foldername = 'pendulum_real'
-                train_imgs = [x for x in os.listdir('./modules/causal_data/{}/train'.format(foldername)) if x.endswith('png')]
+            foldername = 'pendulum_real'
+            train_imgs = [x for x in os.listdir('./modules/causal_data/{}/train'.format(foldername)) if x.endswith('png')]
 
             train_x = []
             for i in tqdm.tqdm(range(len(train_imgs)), desc="train data loading"):
