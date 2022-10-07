@@ -391,8 +391,8 @@ def main():
     if not os.path.exists('./assets/sample_efficiency/'): 
         os.makedirs('./assets/sample_efficiency/')
     with open('./assets/sample_efficiency/{}_{}.txt'.format('CausalVAE', args['num']), 'w') as f:
-        f.write('100 samples accuracy: {:.3f}\n'.format(accuracy[0]))
-        f.write('all samples accuracy: {:.3f}\n'.format(accuracy[1]))
+        f.write('100 samples accuracy: {:.3f}\n'.format(np.array(accuracy_100).mean()))
+        f.write('all samples accuracy: {:.3f}\n'.format(np.array(accuracy).mean()))
         f.write('sample efficiency: {:.3f}\n'.format(sample_efficiency))
     #%%
     wandb.run.finish()
