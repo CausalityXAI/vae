@@ -56,9 +56,9 @@ except:
     import wandb
 
 wandb.init(
-    project="(causal)CausalVAE", 
+    project="CausalDisentangled", 
     entity="anseunghwan",
-    tags=["pendulum"],
+    tags=["CausalVAE"],
 )
 #%%
 import argparse
@@ -81,12 +81,10 @@ def get_args(debug):
 	parser.add_argument("--label_standardization", default=True, type=bool,
                         help="If True, normalize additional information label data")
  
-	parser.add_argument('--epochs', default=150, type=int,
+	parser.add_argument('--epochs', default=200, type=int,
 						help='maximum iteration')
 	parser.add_argument('--batch_size', default=128, type=int,
 						help='batch size')
-	parser.add_argument('--iter_save', type=int, default=5, 
-                     	help="Save model every n epochs")
 	parser.add_argument('--lr', default=0.001, type=float,
                         help='learning rate')
 
