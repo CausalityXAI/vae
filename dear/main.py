@@ -49,7 +49,7 @@ except:
 wandb.init(
     project="(causal)DEAR", 
     entity="anseunghwan",
-    tags=["fully_supervised", "CELEBA"],
+    tags=["fully_supervised", "pendulum"],
 )
 #%%
 import argparse
@@ -74,7 +74,7 @@ def get_args(debug):
     parser.add_argument('--g_steps_per_iter', type=int, default=1, help='how many G updates per iteration')
     parser.add_argument('--n_epochs', type=int, default=1000)
     parser.add_argument('--start_epoch', type=int, default=1)
-    parser.add_argument('--seed', type=int, default=51)
+    parser.add_argument('--seed', type=int, default=1)
 
     # Model settings
     parser.add_argument('--latent_dim', type=int, default=64)
