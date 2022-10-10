@@ -66,7 +66,7 @@ def get_args(debug):
 	parser = argparse.ArgumentParser('parameters')
 	# parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
  
-	parser.add_argument('--seed', type=int, default=1, 
+	parser.add_argument('--seed', type=int, default=2, 
 						help='seed for repeatable results')
 
 	parser.add_argument("--z_dim", default=4, type=int,

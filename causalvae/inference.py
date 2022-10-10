@@ -65,7 +65,7 @@ import argparse
 def get_args(debug):
 	parser = argparse.ArgumentParser('parameters')
  
-	parser.add_argument('--num', type=int, default=4, 
+	parser.add_argument('--num', type=int, default=5, 
 						help='model version')
 
 	if debug:
