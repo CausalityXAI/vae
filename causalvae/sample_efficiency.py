@@ -60,16 +60,16 @@ except:
     import wandb
 
 wandb.init(
-    project="(causal)CausalVAE", 
+    project="CausalDisentangled", 
     entity="anseunghwan",
-    tags=["SampleEfficiency", "pendulum"],
+    tags=["SampleEfficiency"],
 )
 #%%
 import argparse
 def get_args(debug):
 	parser = argparse.ArgumentParser('parameters')
  
-	parser.add_argument('--num', type=int, default=5, 
+	parser.add_argument('--num', type=int, default=0, 
 						help='model version')
 
 	if debug:
@@ -80,10 +80,10 @@ def get_args(debug):
 def main():
     #%%
     
-    args = vars(get_args(debug=True)) # default configuration
+    args = vars(get_args(debug=False)) # default configuration
 
     """model load"""
-    artifact = wandb.use_artifact('anseunghwan/(causal)CausalVAE/model_{}:v{}'.format('CausalVAE', args["num"]), type='model')
+    artifact = wandb.use_artifact('anseunghwan/CausalDisentangled/model_{}:v{}'.format('CausalVAE', args["num"]), type='model')
     for key, item in artifact.metadata.items():
         args[key] = item
     pprint(args)
@@ -299,7 +299,7 @@ def main():
             wandb.log({'TestACC(%)_100samples' : test_correct * 100})
         
         print_input = "[Repeat {:02d}]".format(repeat_num + 1)
-        print_input += ''.join([', {}: {:.4f}'.format(x, np.mean(y).round(2)) for x, y in logs.items()])
+        print_input += ''.join([', {}: {:.4f}'.format(x, np.mean(y)) for x, y in logs.items()])
         print_input += ', TrainACC: {:.2f}%'.format(train_correct * 100)
         print_input += ', TestACC: {:.2f}%'.format(test_correct * 100)
         print(print_input)
@@ -378,7 +378,7 @@ def main():
             wandb.log({'TestACC(%)' : test_correct * 100})
         
         print_input = "[Repeat {:02d}]".format(repeat_num + 1)
-        print_input += ''.join([', {}: {:.4f}'.format(x, np.mean(y).round(2)) for x, y in logs.items()])
+        print_input += ''.join([', {}: {:.4f}'.format(x, np.mean(y)) for x, y in logs.items()])
         print_input += ', TrainACC: {:.2f}%'.format(train_correct * 100)
         print_input += ', TestACC: {:.2f}%'.format(test_correct * 100)
         print(print_input)
@@ -391,9 +391,9 @@ def main():
     if not os.path.exists('./assets/sample_efficiency/'): 
         os.makedirs('./assets/sample_efficiency/')
     with open('./assets/sample_efficiency/{}_{}.txt'.format('CausalVAE', args['num']), 'w') as f:
-        f.write('100 samples accuracy: {:.3f}\n'.format(np.array(accuracy_100).mean()))
-        f.write('all samples accuracy: {:.3f}\n'.format(np.array(accuracy).mean()))
-        f.write('sample efficiency: {:.3f}\n'.format(sample_efficiency))
+        f.write('100 samples accuracy: {:.4f}\n'.format(np.array(accuracy_100).mean()))
+        f.write('all samples accuracy: {:.4f}\n'.format(np.array(accuracy).mean()))
+        f.write('sample efficiency: {:.4f}\n'.format(sample_efficiency))
     #%%
     wandb.run.finish()
 #%%
