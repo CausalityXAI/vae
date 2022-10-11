@@ -28,6 +28,7 @@ import numpy as np
 import math
 import time
 import matplotlib.pyplot as plt
+plt.switch_backend('agg')
 import random
 from pprint import pprint
 from PIL import Image
@@ -42,6 +43,7 @@ from modules.viz import (
     viz_heatmap,
 )
 
+os.environ['KMP_DUPLICATE_LIB_OK']='True'
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
 #%%
 import sys
