@@ -57,16 +57,16 @@ except:
     import wandb
 
 wandb.init(
-    project="(causal)CausalVAE", 
+    project="CausalDisentangled", 
     entity="anseunghwan",
-    tags=["Metric", "pendulum"],
+    tags=["Metric"],
 )
 #%%
 import argparse
 def get_args(debug):
 	parser = argparse.ArgumentParser('parameters')
  
-	parser.add_argument('--num', type=int, default=5, 
+	parser.add_argument('--num', type=int, default=0, 
 						help='model version')
 
 	if debug:
@@ -77,10 +77,10 @@ def get_args(debug):
 def main():
     #%%
     
-    args = vars(get_args(debug=True)) # default configuration
+    args = vars(get_args(debug=False)) # default configuration
 
     """model load"""
-    artifact = wandb.use_artifact('anseunghwan/(causal)CausalVAE/model_{}:v{}'.format('CausalVAE', args["num"]), type='model')
+    artifact = wandb.use_artifact('anseunghwan/CausalDisentangled/model_{}:v{}'.format('CausalVAE', args["num"]), type='model')
     for key, item in artifact.metadata.items():
         args[key] = item
     pprint(args)
@@ -139,11 +139,10 @@ def main():
     dataloader = DataLoader(dataset, batch_size=args["batch_size"], shuffle=False)
     #%%
     """import baseline classifier"""
-    artifact = wandb.use_artifact('anseunghwan/(proposal)CausalVAE/model_classifier:v{}'.format(0), type='model')
+    artifact = wandb.use_artifact('anseunghwan/CausalDisentangled/CDMClassifier:v{}'.format(0), type='model')
     model_dir = artifact.download()
     from modules.model_classifier import Classifier
     """masking"""
-    # if args["dataset"] == 'pendulum':
     mask = []
     # light
     m = torch.zeros(args["image_size"], args["image_size"], 3)
@@ -163,14 +162,11 @@ def main():
     
     args["node"] = 4
         
-    # elif args["dataset"] == 'celeba':
-    #     raise NotImplementedError('Not yet for CELEBA dataset!')
-    
     classifier = Classifier(mask, args, device) 
     if args["cuda"]:
-        classifier.load_state_dict(torch.load(model_dir + '/model_{}.pth'.format('classifier')))
+        classifier.load_state_dict(torch.load(model_dir + '/CDMClassifier.pth'))
     else:
-        classifier.load_state_dict(torch.load(model_dir + '/model_{}.pth'.format('classifier'), map_location=torch.device('cpu')))
+        classifier.load_state_dict(torch.load(model_dir + '/CDMClassifier.pth', map_location=torch.device('cpu')))
     #%%
     """intervention range"""
     decode_m_max = []
