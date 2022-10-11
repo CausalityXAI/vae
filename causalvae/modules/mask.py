@@ -12,8 +12,9 @@ Reference:
 [1]: https://github.com/huawei-noah/trustworthyAI/blob/master/research/CausalVAE/codebase/models/nns/mask.py
 """
 #%%
+import sys
 import os
-os.chdir(os.path.dirname(os.path.abspath(__file__)))
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 import modules.util as ut
 
