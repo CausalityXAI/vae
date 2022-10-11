@@ -56,16 +56,16 @@ except:
     import wandb
 
 wandb.init(
-    project="(causal)CausalVAE", 
+    project="CausalDisentangled", 
     entity="anseunghwan",
-    tags=["Inference", "pendulum"],
+    tags=["CausalVAE", "Inference"],
 )
 #%%
 import argparse
 def get_args(debug):
 	parser = argparse.ArgumentParser('parameters')
  
-	parser.add_argument('--num', type=int, default=5, 
+	parser.add_argument('--num', type=int, default=0, 
 						help='model version')
 
 	if debug:
@@ -76,10 +76,10 @@ def get_args(debug):
 def main():
     #%%
     
-    args = vars(get_args(debug=True)) # default configuration
+    args = vars(get_args(debug=False)) # default configuration
 
     """model load"""
-    artifact = wandb.use_artifact('anseunghwan/(causal)CausalVAE/model_{}:v{}'.format('CausalVAE', args["num"]), type='model')
+    artifact = wandb.use_artifact('anseunghwan/CausalDisentangled/model_{}:v{}'.format('CausalVAE', args["num"]), type='model')
     for key, item in artifact.metadata.items():
         args[key] = item
     pprint(args)
@@ -134,7 +134,6 @@ def main():
             return x, y
     
     dataset = CustomDataset(args)
-    dataloader = DataLoader(dataset, batch_size=args["batch_size"], shuffle=True)
     #%%
     """estimated causal matrix"""
     print('DAG:{}'.format(lvae.dag.A))
@@ -147,6 +146,7 @@ def main():
     decode_m_min = []
     f_z1_max = []
     f_z1_min = []
+    dataloader = DataLoader(dataset, batch_size=args["batch_size"], shuffle=False)
     for u, l in tqdm.tqdm(dataloader):
         if args["cuda"]:
             u = u.cuda()
@@ -167,7 +167,7 @@ def main():
                     (f_z1_min[3].item(), f_z1_max[3].item())]
     #%%
     """do-intervention"""
-    dataloader = DataLoader(dataset, batch_size=1, shuffle=True)
+    dataloader = DataLoader(dataset, batch_size=1, shuffle=False)
     iter_test = iter(dataloader)
     count = 1
     for _ in range(count):
