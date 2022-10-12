@@ -47,14 +47,13 @@ except:
     import wandb
 
 wandb.init(
-    project="(causal)DEAR", 
+    project="CausalDisentangled", 
     entity="anseunghwan",
-    tags=["fully_supervised", "pendulum"],
+    tags=["DEAR"],
 )
 #%%
 import argparse
 def get_args(debug):
-    
     parser = argparse.ArgumentParser(description='Disentangled Generative Causal Representation (DEAR)')
 
     # Data settings
@@ -280,7 +279,6 @@ def main():
 
     # Train
     print('Start training...')
-    # i = 0
     for i in range(args["start_epoch"], args["start_epoch"] + args["n_epochs"]):
         train(i, model, discriminator, encoder_optimizer, decoder_optimizer, D_optimizer, train_loader, 
               label_idx, args["print_every"], save_dir, prior_optimizer, A_optimizer)
@@ -290,13 +288,13 @@ def main():
         #                 save_dir + 'model' + str(i) + '.sav')
     
     print('Model saving...')
-    torch.save(model.state_dict(), save_dir + '/model_{}.pth'.format(args["dataset"]))
-    torch.save(discriminator.state_dict(), save_dir + '/discriminator_{}.pth'.format(args["dataset"]))
-    artifact = wandb.Artifact('model_{}'.format(args["dataset"]), 
+    torch.save(model.state_dict(), save_dir + '/model_DEAR.pth')
+    torch.save(discriminator.state_dict(), save_dir + '/discriminator_DEAR.pth')
+    artifact = wandb.Artifact('model_DEAR', 
                               type='model', 
                               metadata=args) # description=""
-    artifact.add_file(save_dir + '/model_{}.pth'.format(args["dataset"]))
-    artifact.add_file(save_dir + '/discriminator_{}.pth'.format(args["dataset"]))
+    artifact.add_file(save_dir + '/model_DEAR.pth')
+    artifact.add_file(save_dir + '/discriminator_DEAR.pth')
     artifact.add_file('./main.py')
     wandb.log_artifact(artifact)
     
