@@ -279,9 +279,6 @@ def main():
     fixed_zeros = torch.zeros(1, args["latent_dim"], device=device)
 
     # Train
-    wandb.watch(model, log_freq=100) # tracking gradients
-    wandb.watch(discriminator, log_freq=100) # tracking gradients
-    
     print('Start training...')
     # i = 0
     for i in range(args["start_epoch"], args["start_epoch"] + args["n_epochs"]):

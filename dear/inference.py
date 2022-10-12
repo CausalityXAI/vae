@@ -51,7 +51,7 @@ import argparse
 def get_args(debug):
 	parser = argparse.ArgumentParser('parameters')
  
-	parser.add_argument('--num', type=int, default=0, 
+	parser.add_argument('--num', type=int, default=2, 
 						help='model version')
 
 	if debug:
@@ -72,7 +72,7 @@ def get_args(debug):
 def main():
     #%%
     
-    args = vars(get_args(debug=True))
+    args = vars(get_args(debug=False))
     args["dataset"] = "pendulum"
     
     artifact = wandb.use_artifact('anseunghwan/(causal)DEAR/model_{}:v{}'.format(args["dataset"], args["num"]), type='model')

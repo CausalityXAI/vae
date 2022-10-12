@@ -52,7 +52,7 @@ import argparse
 def get_args(debug):
 	parser = argparse.ArgumentParser('parameters')
  
-	parser.add_argument('--num', type=int, default=0, 
+	parser.add_argument('--num', type=int, default=2, 
 						help='model version')
 
 	if debug:
@@ -73,7 +73,7 @@ def get_args(debug):
 def main():
     #%%
     
-    args = vars(get_args(debug=True))
+    args = vars(get_args(debug=False))
     args["dataset"] = "pendulum"
     
     artifact = wandb.use_artifact('anseunghwan/(causal)DEAR/model_{}:v{}'.format(args["dataset"], args["num"]), type='model')
@@ -190,11 +190,10 @@ def main():
                                         map_location=torch.device('cpu')))
     #%%
     """import baseline classifier"""
-    artifact = wandb.use_artifact('anseunghwan/(proposal)CausalVAE/model_classifier:v{}'.format(0), type='model')
+    artifact = wandb.use_artifact('anseunghwan/CausalDisentangled/CDMClassifier:v{}'.format(0), type='model')
     model_dir = artifact.download()
     from modules.model_classifier import Classifier
     """masking"""
-    # if args["dataset"] == 'pendulum':
     mask = []
     # light
     m = torch.zeros(args["image_size"], args["image_size"], 3)
@@ -214,14 +213,11 @@ def main():
     
     args["node"] = 4
         
-    # elif args["dataset"] == 'celeba':
-    #     raise NotImplementedError('Not yet for CELEBA dataset!')
-    
     classifier = Classifier(mask, args, device) 
     if args["cuda"]:
-        classifier.load_state_dict(torch.load(model_dir + '/model_{}.pth'.format('classifier')))
+        classifier.load_state_dict(torch.load(model_dir + '/CDMClassifier.pth'))
     else:
-        classifier.load_state_dict(torch.load(model_dir + '/model_{}.pth'.format('classifier'), map_location=torch.device('cpu')))
+        classifier.load_state_dict(torch.load(model_dir + '/CDMClassifier.pth', map_location=torch.device('cpu')))
     #%%
     """latent range"""
     latents = []
@@ -236,8 +232,8 @@ def main():
     
     latents = torch.cat(latents, dim=0)
     
-    latent_min = latents.cpu().numpy().min(axis=0)[:4]
-    latent_max = latents.cpu().numpy().max(axis=0)[:4]
+    latent_min = latents.cpu().numpy().min(axis=0)
+    latent_max = latents.cpu().numpy().max(axis=0)
     #%%
     """metric"""
     dim = 4
@@ -308,9 +304,9 @@ def main():
         os.makedirs('./assets/CDM/')
     # save as csv
     df = pd.DataFrame(CDM_mat_lower.round(3), columns=dataset.name[:4], index=dataset.name[:4])
-    df.to_csv('./assets/CDM/lower_{}_{}_{}.csv'.format('DEAR', args["prior"], args['num']))
+    df.to_csv('./assets/CDM/lower_{}_{}.csv'.format('DEAR', args['num']))
     df = pd.DataFrame(CDM_mat_upper.round(3), columns=dataset.name[:4], index=dataset.name[:4])
-    df.to_csv('./assets/CDM/upper_{}_{}_{}.csv'.format('DEAR', args["prior"], args['num']))
+    df.to_csv('./assets/CDM/upper_{}_{}.csv'.format('DEAR', args['num']))
     #%%
     wandb.run.finish()
 #%%

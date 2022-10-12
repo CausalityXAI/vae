@@ -55,7 +55,7 @@ import argparse
 def get_args(debug):
 	parser = argparse.ArgumentParser('parameters')
  
-	parser.add_argument('--num', type=int, default=0, 
+	parser.add_argument('--num', type=int, default=2, 
 						help='model version')
 
 	if debug:
@@ -76,7 +76,7 @@ def get_args(debug):
 def main():
     #%%
     
-    args = vars(get_args(debug=True))
+    args = vars(get_args(debug=False))
     args["dataset"] = "pendulum"
     
     artifact = wandb.use_artifact('anseunghwan/(causal)DEAR/model_{}:v{}'.format(args["dataset"], args["num"]), type='model')
@@ -201,22 +201,12 @@ def main():
         num_label, 
         A
     )
-    discriminator = BigJointDiscriminator(
-        args["latent_dim"], 
-        args["d_conv_dim"], 
-        args["image_size"],
-        args["dis_fc_size"]
-    )
     if args["cuda"]:
         model.load_state_dict(torch.load(model_dir + '/model_{}.pth'.format(args["dataset"])))
-        discriminator.load_state_dict(torch.load(model_dir + '/discriminator_{}.pth'.format(args["dataset"])))
         model = model.to(device)
-        discriminator = discriminator.to(device)
     else:
         model.load_state_dict(torch.load(model_dir + '/model_{}.pth'.format(args["dataset"]), 
                                         map_location=torch.device('cpu')))
-        discriminator.load_state_dict(torch.load(model_dir + '/discriminator_{}.pth'.format(args["dataset"]), 
-                                                map_location=torch.device('cpu')))
     #%%
     """with 100 size of training dataset"""
     dataloader = DataLoader(dataset, batch_size=2, shuffle=True)
@@ -358,7 +348,7 @@ def main():
             wandb.log({'TestACC(%)_100samples' : test_correct * 100})
         
         print_input = "[Repeat {:02d}]".format(repeat_num + 1)
-        print_input += ''.join([', {}: {:.4f}'.format(x, np.mean(y).round(2)) for x, y in logs.items()])
+        print_input += ''.join([', {}: {:.4f}'.format(x, np.mean(y)) for x, y in logs.items()])
         print_input += ', TrainACC: {:.2f}%'.format(train_correct * 100)
         print_input += ', TestACC: {:.2f}%'.format(test_correct * 100)
         print(print_input)
@@ -437,7 +427,7 @@ def main():
             wandb.log({'TestACC(%)' : test_correct * 100})
         
         print_input = "[Repeat {:02d}]".format(repeat_num + 1)
-        print_input += ''.join([', {}: {:.4f}'.format(x, np.mean(y).round(2)) for x, y in logs.items()])
+        print_input += ''.join([', {}: {:.4f}'.format(x, np.mean(y)) for x, y in logs.items()])
         print_input += ', TrainACC: {:.2f}%'.format(train_correct * 100)
         print_input += ', TestACC: {:.2f}%'.format(test_correct * 100)
         print(print_input)
@@ -449,9 +439,9 @@ def main():
     sample_efficiency = np.array(accuracy_100).mean() / np.array(accuracy).mean()
     if not os.path.exists('./assets/sample_efficiency/'): 
         os.makedirs('./assets/sample_efficiency/')
-    with open('./assets/sample_efficiency/DEAR_{}_{}_{}.txt'.format(args["dataset"], args["prior"], args['num']), 'w') as f:
-        f.write('100 samples accuracy: {:.3f}\n'.format(np.array(accuracy_100).mean()))
-        f.write('all samples accuracy: {:.3f}\n'.format(np.array(accuracy).mean()))
+    with open('./assets/sample_efficiency/DEAR_{}.txt'.format(args['num']), 'w') as f:
+        f.write('100 samples accuracy: {:.4f}\n'.format(np.array(accuracy_100).mean()))
+        f.write('all samples accuracy: {:.4f}\n'.format(np.array(accuracy).mean()))
         f.write('sample efficiency: {:.4f}\n'.format(sample_efficiency))
     #%%
     wandb.run.finish()
