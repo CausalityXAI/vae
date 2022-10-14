@@ -70,6 +70,8 @@ def get_args(debug):
  
 	parser.add_argument('--seed', type=int, default=2, 
 						help='seed for repeatable results')
+	parser.add_argument("--DR", default=False, type=bool,
+                        help="If True, training model with spurious attribute")
 
 	parser.add_argument("--z_dim", default=4, type=int,
                         help="the number of latent dimension")
@@ -162,7 +164,12 @@ def main():
 	"""dataset"""
 	class CustomDataset(Dataset): 
 		def __init__(self, args):
-			foldername = 'pendulum_real'
+			if args["DR"]:
+				foldername = 'pendulum_DR'
+				self.name = ['light', 'angle', 'length', 'position', 'background', 'target']
+			else:
+				foldername = 'pendulum_real'
+				self.name = ['light', 'angle', 'length', 'position', 'target']
 			train_imgs = [x for x in os.listdir('./modules/causal_data/{}/train'.format(foldername)) if x.endswith('png')]
    
 			train_x = []
@@ -180,7 +187,6 @@ def main():
 				label -= label.mean(axis=0)
 				label /= label.std(axis=0)
 			self.y_data = label
-			self.name = ['light', 'angle', 'length', 'position']
 
 		def __len__(self): 
 			return len(self.x_data)
