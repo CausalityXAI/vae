@@ -236,25 +236,19 @@ def main():
 	wandb.log({'reconstruction': wandb.Image(fig)})
 
 	"""model save"""
-	torch.save(lvae.state_dict(), './assets/model_{}.pth'.format('CausalVAE'))
-	artifact = wandb.Artifact('model_{}'.format('CausalVAE'), 
-								type='model',
-								metadata=args) # description=""
-	artifact.add_file('./assets/model_{}.pth'.format('CausalVAE'))
+	if args["DR"]:
+		torch.save(lvae.state_dict(), './assets/DRmodel_{}.pth'.format('CausalVAE'))
+		artifact = wandb.Artifact('DRmodel_{}'.format('CausalVAE'), 
+									type='model',
+									metadata=args) # description=""
+		artifact.add_file('./assets/DRmodel_{}.pth'.format('CausalVAE'))
+	else:
+		torch.save(lvae.state_dict(), './assets/model_{}.pth'.format('CausalVAE'))
+		artifact = wandb.Artifact('model_{}'.format('CausalVAE'), 
+									type='model',
+									metadata=args) # description=""
+		artifact.add_file('./assets/model_{}.pth'.format('CausalVAE'))
 	wandb.log_artifact(artifact)
- 
-	# """model load"""
-	# artifact = wandb.use_artifact('anseunghwan/(causal)CausalVAE/model_{}:v{}'.format('CausalVAE', 0), type='model')
-	# model_dir = artifact.download()
-	# lvae_ = CausalVAE(z_dim=args["z_dim"], device=device, image_size=args["image_size"]).to(device)
-	# if args["cuda"]:
-	# 	lvae_.load_state_dict(torch.load(model_dir + '/model_{}.pth'.format('CausalVAE')))
-	# else:
-	# 	lvae_.load_state_dict(torch.load(model_dir + '/model_{}.pth'.format('CausalVAE'), map_location=torch.device('cpu')))
-	# x = torch.randn(1, 3, 64, 64)
-	# u = torch.randn(1, 4)
-	# out = lvae.negative_elbo_bound(x, u)
-	# out_ = lvae_.negative_elbo_bound(x, u)
     #%%
 	wandb.run.finish()
 #%%
