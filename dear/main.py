@@ -59,6 +59,8 @@ def get_args(debug):
     # Data settings
     parser.add_argument('--image_size', type=int, default=64)
     parser.add_argument('--dataset', type=str, default='pendulum', choices=['celeba', 'pendulum'])
+    parser.add_argument("--DR", default=False, action='store_true',
+                        help="If True, training model with spurious attribute")
 
     # Training settings
     parser.add_argument('--batch_size', type=int, default=128)
@@ -164,7 +166,12 @@ def main():
     if args["dataset"] == "pendulum":
         class CustomDataset(Dataset): 
             def __init__(self, args):
-                foldername = 'pendulum_real'
+                if args["DR"]:
+                    foldername = 'pendulum_DR'
+                    self.name = ['light', 'angle', 'length', 'position', 'background', 'target']
+                else:
+                    foldername = 'pendulum_real'
+                    self.name = ['light', 'angle', 'length', 'position', 'target']
                 train_imgs = [x for x in os.listdir('./modules/causal_data/{}/train'.format(foldername)) if x.endswith('png')]
                 train_x = []
                 for i in tqdm.tqdm(range(len(train_imgs)), desc="train data loading"):
@@ -288,13 +295,22 @@ def main():
         #                 save_dir + 'model' + str(i) + '.sav')
     
     print('Model saving...')
-    torch.save(model.state_dict(), save_dir + '/model_DEAR.pth')
-    torch.save(discriminator.state_dict(), save_dir + '/discriminator_DEAR.pth')
-    artifact = wandb.Artifact('model_DEAR', 
-                              type='model', 
-                              metadata=args) # description=""
-    artifact.add_file(save_dir + '/model_DEAR.pth')
-    artifact.add_file(save_dir + '/discriminator_DEAR.pth')
+    if args["DR"]:
+        torch.save(model.state_dict(), save_dir + '/DRmodel_DEAR.pth')
+        torch.save(discriminator.state_dict(), save_dir + '/DRdiscriminator_DEAR.pth')
+        artifact = wandb.Artifact('DRmodel_DEAR', 
+                                type='model', 
+                                metadata=args) # description=""
+        artifact.add_file(save_dir + '/DRmodel_DEAR.pth')
+        artifact.add_file(save_dir + '/DRdiscriminator_DEAR.pth')
+    else:
+        torch.save(model.state_dict(), save_dir + '/model_DEAR.pth')
+        torch.save(discriminator.state_dict(), save_dir + '/discriminator_DEAR.pth')
+        artifact = wandb.Artifact('model_DEAR', 
+                                type='model', 
+                                metadata=args) # description=""
+        artifact.add_file(save_dir + '/model_DEAR.pth')
+        artifact.add_file(save_dir + '/discriminator_DEAR.pth')
     artifact.add_file('./main.py')
     wandb.log_artifact(artifact)
     
