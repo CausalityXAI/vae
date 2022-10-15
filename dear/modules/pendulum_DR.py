@@ -18,14 +18,15 @@ import warnings
 warnings.filterwarnings('ignore')
 #%%
 """
-For main experiments and sample efficiency
+For Distributional Robustness (DR)
 Add followings:
 [1]: measurement error
 [2]: environmental disturbance (corruption)
 [3]: target label
+[4]: spurious attribute & correlation
 """
 #%%
-foldername = 'pendulum_real'
+foldername = 'pendulum_DR'
 if not os.path.exists('./causal_data/{}/'.format(foldername)): 
     os.makedirs('./causal_data/{}/train'.format(foldername))
     os.makedirs('./causal_data/{}/test'.format(foldername))
@@ -85,7 +86,6 @@ for light_angle, pendulum_angle in tqdm.tqdm(zip(light_angle_list, pendulum_angl
     objects.append(('length', xi_3))
     objects.append(('position', xi_4))
     objects.append(('target', tau))
-    name = '_'.join([str(round(j, 4)) for i,j in objects])
     
     plt.rcParams['figure.figsize'] = (1.0, 1.0)
     
@@ -104,13 +104,43 @@ for light_angle, pendulum_angle in tqdm.tqdm(zip(light_angle_list, pendulum_angl
     ax.set_ylim((-2, 22))
     plt.axis('off')
     
-    new = pd.DataFrame({i:j for i,j in objects}, index=[1])
-    plt.axis('off')
-    if (count + 1) % 4 == 0:
-        plt.savefig('./causal_data/{}/test/a_' .format(foldername)+ name +'.png',dpi=96)
+    background = 0
+    if (count + 1) % 4 == 0: # test
+        if tau == 1:
+            if np.random.uniform() < 0.5:
+                ax.set_facecolor('blue') 
+                background = 1
+        if tau == 0:
+            if np.random.uniform() < 0.5:
+                ax.set_facecolor('blue') 
+                background = 1
+        
+        objects.append(('background', background))
+        objects.append(('target', tau))
+        
+        name = '_'.join([str(round(j, 4)) for i,j in objects])
+        plt.savefig('./causal_data/{}/test/a_' .format(foldername)+ name +'.png', 
+                    dpi=96, facecolor=ax.get_facecolor())
+        new = pd.DataFrame({i:j for i,j in objects}, index=[1])
         test = test.append(new, ignore_index=True)
-    else:
-        plt.savefig('./causal_data/{}/train/a_'.format(foldername) + name +'.png',dpi=96)
+    
+    else: # train, spurious correlation
+        if tau == 1:
+            if np.random.uniform() < 0.8:
+                ax.set_facecolor('blue') 
+                background = 1
+        if tau == 0:
+            if np.random.uniform() < 0.2:
+                ax.set_facecolor('blue') 
+                background = 1
+        
+        objects.append(('background', background))
+        objects.append(('target', tau))
+        
+        name = '_'.join([str(round(j, 4)) for i,j in objects])
+        plt.savefig('./causal_data/{}/train/a_'.format(foldername) + name +'.png', 
+                    dpi=96, facecolor=ax.get_facecolor())
+        new = pd.DataFrame({i:j for i,j in objects}, index=[1])
         train = train.append(new, ignore_index=True)
     # plt.show()
     plt.clf()
@@ -124,6 +154,9 @@ for light_angle, pendulum_angle in tqdm.tqdm(zip(light_angle_list, pendulum_angl
 # label = np.array([x[:-4].split('_')[1:] for x in train_imgs]).astype(float)
 # label.std(axis=0).round(2)
 # label.mean(axis=0).round(2)
+# #%%
+# from scipy.stats.contingency import crosstab
+# crosstab(label[:, -2], label[:, -1])[1] / len(label)
 #%%
 # train_imgs = [x for x in os.listdir('./causal_data/pendulum/train') if x.endswith('.png')]
 # img = np.array(Image.open('./causal_data/pendulum/train/' + train_imgs[0]).resize((64, 64)))[:, :, :3].astype(float)
