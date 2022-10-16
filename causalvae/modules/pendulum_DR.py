@@ -156,6 +156,7 @@ for light_angle, pendulum_angle in tqdm.tqdm(zip(light_angle_list, pendulum_angl
 # label.mean(axis=0).round(2)
 # #%%
 # from scipy.stats.contingency import crosstab
+# label = np.array([x[:-4].split('_')[1:] for x in test_imgs]).astype(float)
 # crosstab(label[:, -2], label[:, -1])[1] / len(label)
 #%%
 # train_imgs = [x for x in os.listdir('./causal_data/pendulum/train') if x.endswith('.png')]
