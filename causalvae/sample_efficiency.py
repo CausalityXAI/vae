@@ -80,7 +80,7 @@ def get_args(debug):
 def main():
     #%%
     
-    args = vars(get_args(debug=True)) # default configuration
+    args = vars(get_args(debug=False)) # default configuration
 
     """model load"""
     artifact = wandb.use_artifact('anseunghwan/CausalDisentangled/model_{}:v{}'.format('CausalVAE', args["num"]), type='model')
