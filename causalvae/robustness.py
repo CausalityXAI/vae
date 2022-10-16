@@ -180,7 +180,7 @@ def main():
     targets_100 = targets_100[:, [-1]]
     representations_100 = torch.cat(representations_100, dim=0)
     
-    downstream_dataset_100 = TensorDataset(representations_100, background, targets_100)
+    downstream_dataset_100 = TensorDataset(representations_100, targets_100)
     downstream_dataloader_100 = DataLoader(downstream_dataset_100, batch_size=32, shuffle=True)
     
     print(crosstab(background.cpu().numpy(), targets_100.cpu().numpy())[1] / len(targets_100))
