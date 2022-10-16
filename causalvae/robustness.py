@@ -34,6 +34,7 @@ from pprint import pprint
 from PIL import Image
 import os
 import tqdm
+from scipy.stats.contingency import crosstab
 
 from modules.util import _h_A
 import modules.util as ut
@@ -62,7 +63,7 @@ except:
 wandb.init(
     project="CausalDisentangled", 
     entity="anseunghwan",
-    tags=["SampleEfficiency"],
+    tags=["DistributionalRobustness"],
 )
 #%%
 import argparse
@@ -80,7 +81,7 @@ def get_args(debug):
 def main():
     #%%
     
-    args = vars(get_args(debug=True)) # default configuration
+    args = vars(get_args(debug=False)) # default configuration
 
     """model load"""
     artifact = wandb.use_artifact('anseunghwan/CausalDisentangled/DRmodel_{}:v{}'.format('CausalVAE', args["num"]), type='model')
@@ -158,8 +159,6 @@ def main():
     dataset = CustomDataset(args)
     test_dataset = TestDataset(args)
     #%%
-    beta = torch.tensor([[1, -1, 0.5, -0.5]]).to(device)
-    
     """with 100 size of training dataset"""
     dataloader = DataLoader(dataset, batch_size=1, shuffle=True)
     targets_100 = []
@@ -178,12 +177,13 @@ def main():
         if count == 100: break
     targets_100 = torch.cat(targets_100, dim=0)
     background = targets_100[:, [-2]]
-    logit = torch.matmul(targets_100[:, :-3], beta.t())
-    targets_100 = torch.bernoulli(1 / (1 + torch.exp(-logit - 2*torch.sin(logit)))) # nonlinear but causal
+    targets_100 = targets_100[:, [-1]]
     representations_100 = torch.cat(representations_100, dim=0)
     
     downstream_dataset_100 = TensorDataset(representations_100, background, targets_100)
     downstream_dataloader_100 = DataLoader(downstream_dataset_100, batch_size=32, shuffle=True)
+    
+    print(crosstab(background.cpu().numpy(), targets_100.cpu().numpy())[1] / len(targets_100))
     #%%
     """with all training dataset"""
     dataloader = DataLoader(dataset, batch_size=64, shuffle=True)
@@ -200,12 +200,14 @@ def main():
         representations.append(f_z1.squeeze(dim=-1))
         
     targets = torch.cat(targets, dim=0)
-    logit = torch.matmul(targets[:, :-1], beta.t())
-    targets = torch.bernoulli(1 / (1 + torch.exp(-logit - 2*torch.sin(logit)))) # nonlinear but causal
+    background = targets[:, [-2]]
+    targets = targets[:, [-1]]
     representations = torch.cat(representations, dim=0)
     
     downstream_dataset = TensorDataset(representations, targets)
     downstream_dataloader = DataLoader(downstream_dataset, batch_size=64, shuffle=True)
+    
+    print(crosstab(background.cpu().numpy(), targets.cpu().numpy())[1] / len(targets))
     #%%
     """test dataset"""
     test_dataloader = DataLoader(test_dataset, batch_size=64, shuffle=True)
@@ -222,12 +224,14 @@ def main():
         test_representations.append(f_z1.squeeze(dim=-1))
         
     test_targets = torch.cat(test_targets, dim=0)
-    logit = torch.matmul(test_targets[:, :-1], beta.t())
-    test_targets = torch.bernoulli(1 / (1 + torch.exp(-logit - 2*torch.sin(logit)))) # nonlinear but causal
+    background = targets[:, [-2]]
+    targets = targets[:, [-1]]
     test_representations = torch.cat(test_representations, dim=0)
     
     test_downstream_dataset = TensorDataset(test_representations, test_targets)
     test_downstream_dataloader = DataLoader(test_downstream_dataset, batch_size=64, shuffle=True)
+    
+    print(crosstab(background.cpu().numpy(), targets.cpu().numpy())[1] / len(targets))
     #%%
     accuracy = []
     accuracy_100 = []
