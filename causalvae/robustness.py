@@ -231,7 +231,7 @@ def main():
     test_downstream_dataset = TensorDataset(test_representations, test_targets)
     test_downstream_dataloader = DataLoader(test_downstream_dataset, batch_size=64, shuffle=True)
     
-    print(crosstab(background.cpu().numpy(), targets.cpu().numpy())[1] / len(targets))
+    print(crosstab(background.cpu().numpy(), test_targets.cpu().numpy())[1] / len(test_targets))
     #%%
     accuracy = []
     accuracy_100 = []
