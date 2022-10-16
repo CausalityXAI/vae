@@ -224,8 +224,8 @@ def main():
         test_representations.append(f_z1.squeeze(dim=-1))
         
     test_targets = torch.cat(test_targets, dim=0)
-    background = targets[:, [-2]]
-    targets = targets[:, [-1]]
+    background = test_targets[:, [-2]]
+    targets = test_targets[:, [-1]]
     test_representations = torch.cat(test_representations, dim=0)
     
     test_downstream_dataset = TensorDataset(test_representations, test_targets)
