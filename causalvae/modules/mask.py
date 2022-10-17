@@ -208,22 +208,33 @@ class DagLayer(nn.Linear):
         self.a = torch.zeros(out_features,out_features)
         self.a = self.a
         
-        """FIXME: super graph?"""
-        self.a[0][1], self.a[0][2], self.a[0][3] = 1,1,1
-        self.a[1][2], self.a[1][3] = 1,1
-        
+        """FIXME: true-graph"""
+        self.a[0][2] = 1
+        self.a[0][3] = 1
+        self.a[1][2] = 1
+        self.a[1][3] = 1
         self.A = nn.Parameter(self.a)
+        true_graph = torch.zeros(out_features,out_features)
+        true_graph[0, 2:4] = 1
+        true_graph[1, 2:4] = 1
+        self.A_fix_idx = true_graph == 0
         
         self.b = torch.eye(out_features)
         self.b = self.b
         self.B = nn.Parameter(self.b)
         
         self.I = nn.Parameter(torch.eye(out_features))
-        self.I.requires_grad=False
+        self.I.requires_grad = False
         if bias:
             self.bias = nn.Parameter(torch.Tensor(out_features))
         else:
             self.register_parameter('bias', None)
+	
+    def set_zero_grad(self):
+        for i in range(self.out_features):
+            for j in range(self.out_features):
+                if self.A_fix_idx[i, j]:
+                    self.A.grad.data[i, j].zero_()
             
     def mask_z(self,x):
         self.B = self.A

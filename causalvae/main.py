@@ -9,7 +9,7 @@
 #%%
 """
 Reference:
-[1]: https://github.com/huawei-noah/trustworthyAI/blob/master/research/CausalVAE/run_pendulum.py
+[1]: https://github.com/huawei-noah/trustworthyAI/blob/master/research/CausalVAE/run_flow.py
 """
 #%%
 import torch
@@ -103,7 +103,7 @@ def train(dataloader, lvae, args, optimizer, device):
 		'recon': [],
 		'KL': [],
 		'mask': [],
-		'DAG': [],
+		# 'DAG': [],
 	}
 
 	for u, l in tqdm.tqdm(dataloader):
@@ -115,23 +115,22 @@ def train(dataloader, lvae, args, optimizer, device):
 
 		loss_ = []
 
-		# out = lvae.encode(u, l, sample=False)
-		# for x in out:
-		# 	print(x.shape)
 		L, kl, rec, mask, reconstructed_image, _ = lvae.negative_elbo_bound(u, l, sample = False)
-		dag_param = lvae.dag.A
+		# dag_param = lvae.dag.A
 
-		h_a = _h_A(dag_param, dag_param.size()[0])
-		dag = 3*h_a + 0.5*h_a*h_a
-		L = L + dag
+		# h_a = _h_A(dag_param, dag_param.size()[0])
+		# dag = 3*h_a + 0.5*h_a*h_a
+		# L = L + dag
   
 		loss_.append(('loss', L))
 		loss_.append(('recon', rec))
 		loss_.append(('KL', kl))
 		loss_.append(('mask', mask))
-		loss_.append(('DAG', dag))
+		# loss_.append(('DAG', dag))
 
 		L.backward()
+		"""FIXME: Given true-graph"""
+		lvae.dag.set_zero_grad()
 		optimizer.step()
 
 		"""accumulate losses"""
@@ -142,7 +141,7 @@ def train(dataloader, lvae, args, optimizer, device):
 #%%
 def main():
     #%%
-	args = vars(get_args(debug=False)) # default configuration
+	args = vars(get_args(debug=True)) # default configuration
 	pprint(args)
 
 	args["cuda"] = torch.cuda.is_available()
