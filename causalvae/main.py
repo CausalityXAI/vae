@@ -72,6 +72,8 @@ def get_args(debug):
 						help='seed for repeatable results')
 	parser.add_argument("--DR", default=False, action='store_true',
                         help="If True, training model with spurious attribute")
+	# parser.add_argument("--DR", default=True, type=bool,
+    #                     help="If True, training model with spurious attribute")
 
 	parser.add_argument("--z_dim", default=4, type=int,
                         help="the number of latent dimension")

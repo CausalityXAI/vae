@@ -323,8 +323,10 @@ def main():
     if not os.path.exists('./assets/robustness/'): 
         os.makedirs('./assets/robustness/')
     with open('./assets/robustness/{}_{}.txt'.format('CausalVAE', args['num']), 'w') as f:
-        f.write('average accuracy: {:.4f}\n'.format(np.array(accuracy_test).mean()))
-        f.write('worst accuracy: {:.4f}\n'.format(np.array(worst_accuracy_test).mean()))
+        f.write('train average accuracy: {:.4f}\n'.format(np.array(accuracy_train).mean()))
+        f.write('train worst accuracy: {:.4f}\n'.format(np.array(worst_accuracy_train).mean()))
+        f.write('test average accuracy: {:.4f}\n'.format(np.array(accuracy_test).mean()))
+        f.write('test worst accuracy: {:.4f}\n'.format(np.array(worst_accuracy_test).mean()))
     #%%
     wandb.run.finish()
 #%%
