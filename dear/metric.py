@@ -43,16 +43,16 @@ except:
     import wandb
 
 wandb.init(
-    project="(causal)DEAR", 
+    project="CausalDisentangled", 
     entity="anseunghwan",
-    tags=["fully_supervised", "pendulum", "Metric"],
+    tags=["Metric"],
 )
 #%%
 import argparse
 def get_args(debug):
 	parser = argparse.ArgumentParser('parameters')
  
-	parser.add_argument('--num', type=int, default=2, 
+	parser.add_argument('--num', type=int, default=0, 
 						help='model version')
 
 	if debug:
@@ -74,9 +74,8 @@ def main():
     #%%
     
     args = vars(get_args(debug=False))
-    args["dataset"] = "pendulum"
     
-    artifact = wandb.use_artifact('anseunghwan/(causal)DEAR/model_{}:v{}'.format(args["dataset"], args["num"]), type='model')
+    artifact = wandb.use_artifact('anseunghwan/CausalDisentangled/model_DEAR:v{}'.format(args["num"]), type='model')
     for key, item in artifact.metadata.items():
         args[key] = item
     args["cuda"] = torch.cuda.is_available()
@@ -183,10 +182,10 @@ def main():
         A
     )
     if args["cuda"]:
-        model.load_state_dict(torch.load(model_dir + '/model_{}.pth'.format(args["dataset"])))
+        model.load_state_dict(torch.load(model_dir + '/model_DEAR.pth'))
         model = model.to(device)
     else:
-        model.load_state_dict(torch.load(model_dir + '/model_{}.pth'.format(args["dataset"]), 
+        model.load_state_dict(torch.load(model_dir + '/model_DEAR.pth', 
                                         map_location=torch.device('cpu')))
     #%%
     """import baseline classifier"""
