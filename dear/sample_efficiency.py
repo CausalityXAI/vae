@@ -46,16 +46,16 @@ except:
     import wandb
 
 wandb.init(
-    project="(causal)DEAR", 
+    project="CausalDisentangled", 
     entity="anseunghwan",
-    tags=["fully_supervised", "pendulum", "SampleEfficiency"],
+    tags=["SampleEfficiency"],
 )
 #%%
 import argparse
 def get_args(debug):
 	parser = argparse.ArgumentParser('parameters')
  
-	parser.add_argument('--num', type=int, default=2, 
+	parser.add_argument('--num', type=int, default=0, 
 						help='model version')
 
 	if debug:
@@ -77,9 +77,8 @@ def main():
     #%%
     
     args = vars(get_args(debug=False))
-    args["dataset"] = "pendulum"
     
-    artifact = wandb.use_artifact('anseunghwan/(causal)DEAR/model_{}:v{}'.format(args["dataset"], args["num"]), type='model')
+    artifact = wandb.use_artifact('anseunghwan/CausalDisentangled/model_DEAR:v{}'.format(args["num"]), type='model')
     for key, item in artifact.metadata.items():
         args[key] = item
     args["cuda"] = torch.cuda.is_available()
@@ -202,12 +201,14 @@ def main():
         A
     )
     if args["cuda"]:
-        model.load_state_dict(torch.load(model_dir + '/model_{}.pth'.format(args["dataset"])))
+        model.load_state_dict(torch.load(model_dir + '/model_DEAR.pth'))
         model = model.to(device)
     else:
-        model.load_state_dict(torch.load(model_dir + '/model_{}.pth'.format(args["dataset"]), 
+        model.load_state_dict(torch.load(model_dir + '/model_DEAR.pth', 
                                         map_location=torch.device('cpu')))
     #%%
+    beta = torch.tensor([[1, -1, 0.5, -0.5]]).to(device)
+    
     """with 100 size of training dataset"""
     dataloader = DataLoader(dataset, batch_size=2, shuffle=True)
     targets_100 = []
@@ -225,7 +226,8 @@ def main():
         count += 1
         if count == 50: break
     targets_100 = torch.cat(targets_100, dim=0)
-    targets_100 = targets_100[:, [-1]]
+    logit = torch.matmul(targets_100[:, :-1], beta.t())
+    targets_100 = torch.bernoulli(1 / (1 + torch.exp(-logit - 2*torch.sin(logit))))
     representations_100 = torch.cat(representations_100, dim=0)[:, :len(label_idx)]
     
     downstream_dataset_100 = TensorDataset(representations_100, targets_100)
@@ -246,7 +248,8 @@ def main():
         representations.append(mean)
         
     targets = torch.cat(targets, dim=0)
-    targets = targets[:, [-1]]
+    logit = torch.matmul(targets[:, :-1], beta.t())
+    targets = torch.bernoulli(1 / (1 + torch.exp(-logit - 2*torch.sin(logit))))
     representations = torch.cat(representations, dim=0)[:, :len(label_idx)]
     
     downstream_dataset = TensorDataset(representations, targets)
@@ -267,7 +270,8 @@ def main():
         test_representations.append(mean)
         
     test_targets = torch.cat(test_targets, dim=0)
-    test_targets = test_targets[:, [-1]]
+    logit = torch.matmul(test_targets[:, :-1], beta.t())
+    test_targets = torch.bernoulli(1 / (1 + torch.exp(-logit - 2*torch.sin(logit))))
     test_representations = torch.cat(test_representations, dim=0)[:, :len(label_idx)]
     
     test_downstream_dataset = TensorDataset(test_representations, test_targets)
