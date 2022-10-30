@@ -131,7 +131,7 @@ def load_config(args):
 def main():
     #%%
     global args
-    args = vars(get_args(debug=True))
+    args = vars(get_args(debug=False))
     args = load_config(args)
     wandb.config.update(args)
     
