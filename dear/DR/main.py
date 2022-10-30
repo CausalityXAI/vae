@@ -49,7 +49,7 @@ except:
 wandb.init(
     project="CausalDisentangled", 
     entity="anseunghwan",
-    tags=["DEAR"],
+    tags=["DEAR", "DR"],
 )
 #%%
 import argparse
@@ -59,8 +59,6 @@ def get_args(debug):
     # Data settings
     parser.add_argument('--image_size', type=int, default=64)
     parser.add_argument('--dataset', type=str, default='pendulum', choices=['celeba', 'pendulum'])
-    parser.add_argument("--DR", default=False, action='store_true',
-                        help="If True, training model with spurious attribute")
 
     # Training settings
     parser.add_argument('--batch_size', type=int, default=128)
@@ -131,8 +129,9 @@ def load_config(args):
     return args
 #%%
 def main():
+    #%%
     global args
-    args = vars(get_args(debug=False))
+    args = vars(get_args(debug=True))
     args = load_config(args)
     wandb.config.update(args)
     
@@ -140,9 +139,9 @@ def main():
         args["dataset"], args["labels"], args["prior"], str(args["sup_type"]))
     if not os.path.exists(save_dir): 
         os.makedirs(save_dir)
-    
+    #%%
     if 'pendulum' in args["dataset"]:
-        label_idx = range(4)
+        label_idx = range(5)
     else:
         if args["labels"] == 'smile':
             label_idx = [31, 20, 19, 21, 23, 13]
@@ -161,17 +160,13 @@ def main():
     device = torch.device('cuda:0') if torch.cuda.is_available() else torch.device('cpu')
     global celoss
     celoss = torch.nn.BCEWithLogitsLoss()
-
+    #%%
     """dataset"""
     if args["dataset"] == "pendulum":
         class CustomDataset(Dataset): 
             def __init__(self, args):
-                if args["DR"]:
-                    foldername = 'pendulum_DR'
-                    self.name = ['light', 'angle', 'length', 'position', 'background', 'target']
-                else:
-                    foldername = 'pendulum_real'
-                    self.name = ['light', 'angle', 'length', 'position', 'target']
+                foldername = 'pendulum_DR'
+                self.name = ['light', 'angle', 'length', 'position', 'background', 'target']
                 train_imgs = [x for x in os.listdir('./modules/causal_data/{}/train'.format(foldername)) if x.endswith('png')]
                 train_x = []
                 for i in tqdm.tqdm(range(len(train_imgs)), desc="train data loading"):
@@ -182,14 +177,14 @@ def main():
                 self.x_data = (np.array(train_x).astype(float) - 127.5) / 127.5
                 
                 label = np.array([x[:-4].split('_')[1:] for x in train_imgs]).astype(float)
-                label = label[:, :4]
-                label = label - label.mean(axis=0)
+                label = label[:, :5]
+                label[:, :4] = label[:, :4] - label[:, :4].mean(axis=0)
                 self.std = label.std(axis=0)
                 """bounded label: normalize to (0, 1)"""
                 if args["sup_type"] == 'ce': 
-                    label = (label - label.min(axis=0)) / (label.max(axis=0) - label.min(axis=0))
+                    label[:, :4] = (label[:, :4] - label[:, :4].min(axis=0)) / (label[:, :4].max(axis=0) - label[:, :4].min(axis=0))
                 elif args["sup_type"] == 'l2': 
-                    label = (label - label.mean(axis=0)) / label.std(axis=0)
+                    label[:, :4] = (label[:, :4] - label[:, :4].mean(axis=0)) / label[:, :4].std(axis=0)
                 self.y_data = label
                 self.name = ['light', 'angle', 'length', 'position']
 
@@ -219,7 +214,7 @@ def main():
         train_loader = torch.utils.data.DataLoader(train_set, batch_size=args["batch_size"], 
                                                     shuffle=True, pin_memory=False,
                                                     drop_last=True, num_workers=0)
-
+    #%%
     if 'scm' in args["prior"]:
         A = torch.zeros((num_label, num_label))
         if args["labels"] == 'smile':
@@ -233,7 +228,7 @@ def main():
             A[1, 2:4] = 1
     else:
         A = None
-
+    #%%
     print('Build models...')
     model = BGM(
         args["latent_dim"], 
@@ -274,7 +269,7 @@ def main():
 
     model = model.to(device)
     discriminator = discriminator.to(device)
-
+    #%%
     # Fixed noise from prior p_z for generating from G
     global fixed_noise, fixed_unif_noise, fixed_zeros
     if args["prior"] == 'uniform':
@@ -283,7 +278,7 @@ def main():
         fixed_noise = torch.randn(args["save_n_samples"], args["latent_dim"], device=device)
     fixed_unif_noise = torch.rand(1, args["latent_dim"], device=device) * 2 - 1
     fixed_zeros = torch.zeros(1, args["latent_dim"], device=device)
-
+    #%%
     # Train
     print('Start training...')
     for i in range(args["start_epoch"], args["start_epoch"] + args["n_epochs"]):
@@ -293,27 +288,18 @@ def main():
         #     torch.save({'model': model.state_dict(), 
         #                 'discriminator': discriminator.state_dict()},
         #                 save_dir + 'model' + str(i) + '.sav')
-    
+    #%%
     print('Model saving...')
-    if args["DR"]:
-        torch.save(model.state_dict(), save_dir + '/DRmodel_DEAR.pth')
-        torch.save(discriminator.state_dict(), save_dir + '/DRdiscriminator_DEAR.pth')
-        artifact = wandb.Artifact('DRmodel_DEAR', 
-                                type='model', 
-                                metadata=args) # description=""
-        artifact.add_file(save_dir + '/DRmodel_DEAR.pth')
-        artifact.add_file(save_dir + '/DRdiscriminator_DEAR.pth')
-    else:
-        torch.save(model.state_dict(), save_dir + '/model_DEAR.pth')
-        torch.save(discriminator.state_dict(), save_dir + '/discriminator_DEAR.pth')
-        artifact = wandb.Artifact('model_DEAR', 
-                                type='model', 
-                                metadata=args) # description=""
-        artifact.add_file(save_dir + '/model_DEAR.pth')
-        artifact.add_file(save_dir + '/discriminator_DEAR.pth')
+    torch.save(model.state_dict(), save_dir + '/DRmodel_DEAR.pth')
+    torch.save(discriminator.state_dict(), save_dir + '/DRdiscriminator_DEAR.pth')
+    artifact = wandb.Artifact('DRmodel_DEAR', 
+                            type='model', 
+                            metadata=args) # description=""
+    artifact.add_file(save_dir + '/DRmodel_DEAR.pth')
+    artifact.add_file(save_dir + '/DRdiscriminator_DEAR.pth')
     artifact.add_file('./main.py')
     wandb.log_artifact(artifact)
-    
+    #%%
     # """model load"""
     # artifact = wandb.use_artifact('anseunghwan/(causal)DEAR/model_{}:v{}'.format(args["dataset"], 0), type='model')
     # artifact.metadata
@@ -355,7 +341,7 @@ def main():
     # out = discriminator(x, z)
     # out_ = discriminator_(x, z)
     # out[0] - out_[0]
-    
+    #%%
     wandb.run.finish()
 #%%
 # epoch, model, discriminator, encoder_optimizer, decoder_optimizer, D_optimizer, train_loader, label_idx, print_every, save_dir, prior_optimizer, A_optimizer = \
