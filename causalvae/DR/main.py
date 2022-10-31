@@ -139,7 +139,7 @@ def train(dataloader, lvae, args, optimizer, device):
 #%%
 def main():
     #%%
-	args = vars(get_args(debug=True)) # default configuration
+	args = vars(get_args(debug=False)) # default configuration
 	pprint(args)
 
 	args["cuda"] = torch.cuda.is_available()
