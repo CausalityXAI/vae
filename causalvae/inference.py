@@ -42,6 +42,7 @@ from modules.viz import (
     viz_heatmap,
 )
 
+os.environ['KMP_DUPLICATE_LIB_OK']='True'
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
 #%%
 import sys

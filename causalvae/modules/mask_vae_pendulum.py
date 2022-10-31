@@ -34,7 +34,10 @@ class CausalVAE(nn.Module):
         self.z2_dim = z2_dim
         self.image_size = image_size
         self.channel = 3
-        self.scale = np.array([[0,44],[100,40],[6.5, 3.5],[10,5]])
+        """FIXME"""
+        self.scale = np.array([[0, 1],[0, 1],[0, 1],[0, 1]])
+        # self.scale = np.array([[0, 44],[100, 40],[6.5, 3.5],[10, 5]])
+        
         # Small note: unfortunate name clash with torch.nn
         # nn here refers to the specific architecture file found in
         # codebase/models/nns/*.py
