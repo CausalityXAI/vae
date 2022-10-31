@@ -34,7 +34,10 @@ class CausalVAE(nn.Module):
         self.z2_dim = z2_dim
         self.image_size = image_size
         self.channel = 3
-        self.scale = np.array([[0,44],[100,40],[6.5, 3.5],[10,5]])
+        """FIXME"""
+        self.scale = np.array([[0, 1],[0, 1],[0, 1],[0, 1],[0, 1]])
+        # self.scale = np.array([[0, 44],[100, 40],[6.5, 3.5],[10, 5]])
+        
         # Small note: unfortunate name clash with torch.nn
         # nn here refers to the specific architecture file found in
         # codebase/models/nns/*.py
@@ -60,28 +63,13 @@ class CausalVAE(nn.Module):
         decode_m, decode_v = self.dag.calculate_dag(q_m.to(self.device), torch.ones(q_m.size()[0], self.z1_dim,self.z2_dim).to(self.device))
         decode_m, decode_v = decode_m.reshape([q_m.size()[0], self.z1_dim,self.z2_dim]),decode_v
         if sample == False:
-          if mask != None and mask < 2:
-              z_mask = torch.ones(q_m.size()[0], self.z1_dim,self.z2_dim).to(self.device)*adj
-              decode_m[:, mask, :] = z_mask[:, mask, :]
-            #   decode_v[:, mask, :] = z_mask[:, mask, :]
           m_zm, m_zv = self.dag.mask_z(decode_m.to(self.device)).reshape([q_m.size()[0], self.z1_dim,self.z2_dim]),decode_v.reshape([q_m.size()[0], self.z1_dim,self.z2_dim])
           m_u = self.dag.mask_u(label.to(self.device))
           
           f_z = self.mask_z.mix(m_zm).reshape([q_m.size()[0], self.z1_dim,self.z2_dim]).to(self.device)
           e_tilde = self.attn.attention(decode_m.reshape([q_m.size()[0], self.z1_dim,self.z2_dim]).to(self.device),q_m.reshape([q_m.size()[0], self.z1_dim,self.z2_dim]).to(self.device))[0]
-          if mask != None and mask < 2:
-              z_mask = torch.ones(q_m.size()[0],self.z1_dim,self.z2_dim).to(self.device)*adj
-              e_tilde[:, mask, :] = z_mask[:, mask, :]
-              
           f_z1 = f_z+e_tilde
-          if mask!= None and mask == 2 :
-              z_mask = torch.ones(q_m.size()[0],self.z1_dim,self.z2_dim).to(self.device)*adj
-              f_z1[:, mask, :] = z_mask[:, mask, :]
-            #   m_zv[:, mask, :] = z_mask[:, mask, :]
-          if mask!= None and mask == 3 :
-              z_mask = torch.ones(q_m.size()[0],self.z1_dim,self.z2_dim).to(self.device)*adj
-              f_z1[:, mask, :] = z_mask[:, mask, :]
-            #   m_zv[:, mask, :] = z_mask[:, mask, :]
+          
           g_u = self.mask_u.mix(m_u).to(self.device)
           z_given_dag = ut.conditional_sample_gaussian(f_z1, m_zv*lambdav)
           

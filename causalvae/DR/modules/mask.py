@@ -58,7 +58,7 @@ def dag_left_linear(input, weight, bias=None):
     return ret
 #%%
 class MaskLayer(nn.Module):
-	def __init__(self, z_dim, concept=4, z2_dim=1):
+	def __init__(self, z_dim, concept=5, z2_dim=1):
 		super().__init__()
 		self.z_dim = z_dim
 		self.z2_dim = z2_dim
@@ -85,6 +85,11 @@ class MaskLayer(nn.Module):
 			nn.ELU(),
 			nn.Linear(32, z2_dim)
 		)
+		self.net5 = nn.Sequential(
+			nn.Linear(z2_dim , 32),
+			nn.ELU(),
+			nn.Linear(32, z2_dim)
+		)
 		self.net = nn.Sequential(
 			nn.Linear(z_dim , 32),
 			nn.ELU(),
@@ -104,28 +109,20 @@ class MaskLayer(nn.Module):
 		zy = z.view(-1, self.concept * self.z2_dim)
 		if self.z2_dim == 1:
 			zy = zy.reshape(zy.size()[0],zy.size()[1],1)
-			if self.concept ==4:
-				zy1, zy2, zy3, zy4= zy[:,0],zy[:,1],zy[:,2],zy[:,3]
-			elif self.concept ==3:
-				zy1, zy2, zy3= zy[:,0],zy[:,1],zy[:,2]
+			zy1, zy2, zy3, zy4, zy5 = zy[:,0],zy[:,1],zy[:,2],zy[:,3],zy[:,4]
 		else:
-			if self.concept ==4:
-				zy1, zy2, zy3, zy4 = torch.split(zy, self.z_dim//self.concept, dim = 1)
-			elif self.concept ==3:
-				zy1, zy2, zy3= torch.split(zy, self.z_dim//self.concept, dim = 1)
+			zy1, zy2, zy3, zy4, zy5 = torch.split(zy, self.z_dim//self.concept, dim = 1)
 		rx1 = self.net1(zy1)
 		rx2 = self.net2(zy2)
 		rx3 = self.net3(zy3)
-		if self.concept ==4:
-			rx4 = self.net4(zy4)
-			h = torch.cat((rx1,rx2,rx3,rx4), dim=1)
-		elif self.concept ==3:
-			h = torch.cat((rx1,rx2,rx3), dim=1)
+		rx4 = self.net4(zy4)
+		rx5 = self.net5(zy5)
+		h = torch.cat((rx1,rx2,rx3,rx4,rx5), dim=1)
 		#print(h.size())
 		return h
 #%%
 class CausalLayer(nn.Module):
-	def __init__(self, z_dim, concept=4, z1_dim=4):
+	def __init__(self, z_dim, concept=5, z1_dim=4):
 		super().__init__()
 		self.z_dim = z_dim
 		self.z1_dim = z1_dim
@@ -152,6 +149,11 @@ class CausalLayer(nn.Module):
 			nn.ELU(),
 			nn.Linear(32, z1_dim)
 		)
+		self.net5 = nn.Sequential(
+			nn.Linear(z1_dim , 32),
+			nn.ELU(),
+			nn.Linear(32, z1_dim)
+		)
 		self.net = nn.Sequential(
 			nn.Linear(z_dim , 128),
 			nn.ELU(),
@@ -172,14 +174,15 @@ class CausalLayer(nn.Module):
 		zy = z.view(-1, self.concept*self.z1_dim)
 		if self.z1_dim == 1:
 			zy = zy.reshape(zy.size()[0],zy.size()[1],1)
-			zy1, zy2, zy3, zy4= zy[:,0],zy[:,1],zy[:,2],zy[:,3]
+			zy1, zy2, zy3, zy4, zy5 = zy[:,0],zy[:,1],zy[:,2],zy[:,3],zy[:,4]
 		else:
-			zy1, zy2, zy3, zy4 = torch.split(zy, self.z_dim//self.concept, dim = 1)
+			zy1, zy2, zy3, zy4, zy5 = torch.split(zy, self.z_dim//self.concept, dim = 1)
 		rx1 = self.net1(zy1)
 		rx2 = self.net2(zy2)
 		rx3 = self.net3(zy3)
 		rx4 = self.net4(zy4)
-		h = torch.cat((rx1,rx2,rx3,rx4), dim=1)
+		rx5 = self.net5(zy5)
+		h = torch.cat((rx1,rx2,rx3,rx4,rx5), dim=1)
 		#print(h.size())
 		return h,v
 #%%
@@ -349,7 +352,7 @@ class Encoder(nn.Module):
 	def conditional_encode(self, x, l):
 		x = x.view(-1, self.channel * self.image_size * self.image_size)
 		x = F.elu(self.fc1(x))
-		l = l.view(-1, 4)
+		l = l.view(-1, 5)
 		x = F.elu(self.fc2(torch.cat([x, l], dim=1)))
 		x = F.elu(self.fc3(x))
 		x = self.fc4(x)
@@ -413,11 +416,20 @@ class Decoder_DAG(nn.Module):
 			nn.Linear(1024, channel * image_size * image_size)
 		)
 		self.net5 = nn.Sequential(
+			nn.Linear(z1_dim + y_dim, 300),
+			nn.ELU(),
+			nn.Linear(300, 300),
+			nn.ELU(),
+			nn.Linear(300, 1024),
+			nn.ELU(),
+			nn.Linear(1024, channel * image_size * image_size)
+		)
+		self.net6 = nn.Sequential(
 			nn.ELU(),
 			nn.Linear(1024, channel * image_size * image_size)
 		)
    
-		self.net6 = nn.Sequential(
+		self.net7 = nn.Sequential(
 			nn.Linear(z_dim, 300),
 			nn.ELU(),
 			nn.Linear(300, 300),
@@ -454,19 +466,20 @@ class Decoder_DAG(nn.Module):
 		zy = z if y is None else torch.cat((z, y), dim=1)
 		if self.z1_dim == 1:
 			zy = zy.reshape(zy.size()[0],zy.size()[1],1)
-			zy1, zy2, zy3, zy4 = zy[:,0],zy[:,1],zy[:,2],zy[:,3]
+			zy1, zy2, zy3, zy4, zy5 = zy[:,0],zy[:,1],zy[:,2],zy[:,3],zy[:,4]
 		else:
-			zy1, zy2, zy3, zy4 = torch.split(zy, self.z_dim//self.concept, dim = 1)
+			zy1, zy2, zy3, zy4, zy5 = torch.split(zy, self.z_dim//self.concept, dim = 1)
 		rx1 = self.net1(zy1)
 		rx2 = self.net2(zy2)
 		rx3 = self.net3(zy3)
 		rx4 = self.net4(zy4)
-		h = self.net5((rx1+rx2+rx3+rx4)/4)
+		rx5 = self.net5(zy5)
+		h = self.net6((rx1+rx2+rx3+rx4+rx5)/4)
 		return h,h,h,h,h
    
 	def decode(self, z, u , y = None):
 		z = z.view(-1, self.concept*self.z1_dim)
-		h = self.net6(z)
+		h = self.net7(z)
 		return h,h,h,h,h
     
 	def decode_sep(self, z, u, y=None):
@@ -475,33 +488,26 @@ class Decoder_DAG(nn.Module):
 			
 		if self.z1_dim == 1:
 			zy = zy.reshape(zy.size()[0],zy.size()[1],1)
-			if self.concept ==4:
-				zy1, zy2, zy3, zy4= zy[:,0],zy[:,1],zy[:,2],zy[:,3]
-			elif self.concept ==3:
-				zy1, zy2, zy3= zy[:,0],zy[:,1],zy[:,2]
+			zy1, zy2, zy3, zy4, zy5 = zy[:,0],zy[:,1],zy[:,2],zy[:,3],zy[:,4]
 		else:
-			if self.concept ==4:
-				zy1, zy2, zy3, zy4 = torch.split(zy, self.z_dim//self.concept, dim = 1)
-			elif self.concept ==3:
-				zy1, zy2, zy3= torch.split(zy, self.z_dim//self.concept, dim = 1)
+			zy1, zy2, zy3, zy4, zy5 = torch.split(zy, self.z_dim//self.concept, dim = 1)
 		rx1 = self.net1(zy1)
 		rx2 = self.net2(zy2)
 		rx3 = self.net3(zy3)
-		if self.concept ==4:
-			rx4 = self.net4(zy4)
-			h = (rx1+rx2+rx3+rx4)/self.concept
-		elif self.concept ==3:
-			h = (rx1+rx2+rx3)/self.concept
+		rx4 = self.net4(zy4)
+		rx5 = self.net5(zy5)
+		h = (rx1+rx2+rx3+rx4+rx5)/self.concept
 		return h,h,h,h,h
    
 	def decode_cat(self, z, u, y=None):
 		z = z.view(-1, 4*4)
 		zy = z if y is None else torch.cat((z, y), dim=1)
-		zy1, zy2, zy3, zy4 = torch.split(zy, 1, dim = 1)
+		zy1, zy2, zy3, zy4, zy5 = torch.split(zy, 1, dim = 1)
 		rx1 = self.net1(zy1)
 		rx2 = self.net2(zy2)
 		rx3 = self.net3(zy3)
 		rx4 = self.net4(zy4)
-		h = self.net5( torch.cat((rx1,rx2, rx3, rx4), dim=1))
+		rx5 = self.net5(zy5)
+		h = self.net6( torch.cat((rx1,rx2, rx3, rx4, rx4), dim=1))
 		return h
 #%%

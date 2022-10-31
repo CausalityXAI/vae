@@ -60,7 +60,7 @@ except:
 wandb.init(
     project="CausalDisentangled", 
     entity="anseunghwan",
-    tags=["CausalVAE"],
+    tags=["CausalVAE", "DR"],
 )
 #%%
 import argparse
@@ -70,14 +70,10 @@ def get_args(debug):
  
 	parser.add_argument('--seed', type=int, default=2, 
 						help='seed for repeatable results')
-	parser.add_argument("--DR", default=False, action='store_true',
-                        help="If True, training model with spurious attribute")
-	# parser.add_argument("--DR", default=True, type=bool,
-    #                     help="If True, training model with spurious attribute")
 
-	parser.add_argument("--z_dim", default=4, type=int,
+	parser.add_argument("--z_dim", default=5, type=int,
                         help="the number of latent dimension")
-	parser.add_argument("--z1_dim", default=4, type=int,
+	parser.add_argument("--z1_dim", default=5, type=int,
                         help="the number of latent 1 dimension")
 	parser.add_argument("--z2_dim", default=1, type=int,
                         help="the number of latent 2 dimension")
@@ -143,7 +139,7 @@ def train(dataloader, lvae, args, optimizer, device):
 #%%
 def main():
     #%%
-	args = vars(get_args(debug=False)) # default configuration
+	args = vars(get_args(debug=True)) # default configuration
 	pprint(args)
 
 	args["cuda"] = torch.cuda.is_available()
@@ -165,12 +161,8 @@ def main():
 	"""dataset"""
 	class CustomDataset(Dataset): 
 		def __init__(self, args):
-			if args["DR"]:
-				foldername = 'pendulum_DR'
-				self.name = ['light', 'angle', 'length', 'position', 'background', 'target']
-			else:
-				foldername = 'pendulum_real'
-				self.name = ['light', 'angle', 'length', 'position', 'target']
+			foldername = 'pendulum_DR'
+			self.name = ['light', 'angle', 'length', 'position', 'background', 'target']
 			train_imgs = [x for x in os.listdir('./modules/causal_data/{}/train'.format(foldername)) if x.endswith('png')]
    
 			train_x = []
@@ -181,12 +173,12 @@ def main():
 			self.x_data = np.array(train_x).astype(float) / 255.
 			
 			label = np.array([x[:-4].split('_')[1:] for x in train_imgs]).astype(float)
-			label = label[:, :4]
+			label = label[:, :5]
 			self.std = label.std(axis=0)
 			"""label standardization"""
 			if args["label_standardization"]: 
-				label -= label.mean(axis=0)
-				label /= label.std(axis=0)
+				label[:, :4] -= label[:, :4].mean(axis=0)
+				label[:, :4] /= label[:, :4].std(axis=0)
 			self.y_data = label
 
 		def __len__(self): 
@@ -237,18 +229,11 @@ def main():
 	wandb.log({'reconstruction': wandb.Image(fig)})
 
 	"""model save"""
-	if args["DR"]:
-		torch.save(lvae.state_dict(), './assets/DRmodel_{}.pth'.format('CausalVAE'))
-		artifact = wandb.Artifact('DRmodel_{}'.format('CausalVAE'), 
-									type='model',
-									metadata=args) # description=""
-		artifact.add_file('./assets/DRmodel_{}.pth'.format('CausalVAE'))
-	else:
-		torch.save(lvae.state_dict(), './assets/model_{}.pth'.format('CausalVAE'))
-		artifact = wandb.Artifact('model_{}'.format('CausalVAE'), 
-									type='model',
-									metadata=args) # description=""
-		artifact.add_file('./assets/model_{}.pth'.format('CausalVAE'))
+	torch.save(lvae.state_dict(), './assets/DRmodel_{}.pth'.format('CausalVAE'))
+	artifact = wandb.Artifact('DRmodel_{}'.format('CausalVAE'), 
+								type='model',
+								metadata=args) # description=""
+	artifact.add_file('./assets/DRmodel_{}.pth'.format('CausalVAE'))
 	wandb.log_artifact(artifact)
     #%%
 	wandb.run.finish()
