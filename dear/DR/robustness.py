@@ -7,6 +7,7 @@ import sys
 import random
 import tqdm
 from PIL import Image
+from scipy.stats.contingency import crosstab
 
 import torch
 import torch.utils.data
@@ -48,7 +49,7 @@ except:
 wandb.init(
     project="CausalDisentangled", 
     entity="anseunghwan",
-    tags=["SampleEfficiency"],
+    tags=["DEAR", "DistributionalRobustness"],
 )
 #%%
 import argparse
@@ -78,14 +79,14 @@ def main():
     
     args = vars(get_args(debug=False))
     
-    artifact = wandb.use_artifact('anseunghwan/CausalDisentangled/model_DEAR:v{}'.format(args["num"]), type='model')
+    artifact = wandb.use_artifact('anseunghwan/CausalDisentangled/DRmodel_DEAR:v{}'.format(args["num"]), type='model')
     for key, item in artifact.metadata.items():
         args[key] = item
     args["cuda"] = torch.cuda.is_available()
     wandb.config.update(args)
     
     if 'pendulum' in args["dataset"]:
-        label_idx = range(4)
+        label_idx = range(5)
     else:
         if args["labels"] == 'smile':
             label_idx = [31, 20, 19, 21, 23, 13]
@@ -106,7 +107,8 @@ def main():
     if args["dataset"] == "pendulum":
         class CustomDataset(Dataset): 
             def __init__(self, args):
-                foldername = 'pendulum_real'
+                foldername = 'pendulum_DR'
+                self.name = ['light', 'angle', 'length', 'position', 'background', 'target']
                 train_imgs = [x for x in os.listdir('./modules/causal_data/{}/train'.format(foldername)) if x.endswith('png')]
                 train_x = []
                 for i in tqdm.tqdm(range(len(train_imgs)), desc="train data loading"):
@@ -118,7 +120,6 @@ def main():
                 
                 label = np.array([x[:-4].split('_')[1:] for x in train_imgs]).astype(float)
                 self.y_data = label
-                self.name = ['light', 'angle', 'length', 'position']
 
             def __len__(self): 
                 return len(self.x_data)
@@ -130,7 +131,8 @@ def main():
         
         class TestDataset(Dataset): 
             def __init__(self, args):
-                foldername = 'pendulum_real'
+                foldername = 'pendulum_DR'
+                self.name = ['light', 'angle', 'length', 'position', 'background', 'target']
                 test_imgs = [x for x in os.listdir('./modules/causal_data/{}/test'.format(foldername)) if x.endswith('png')]
                 test_x = []
                 for i in tqdm.tqdm(range(len(test_imgs)), desc="test data loading"):
@@ -142,7 +144,6 @@ def main():
                 
                 label = np.array([x[:-4].split('_')[1:] for x in test_imgs]).astype(float)
                 self.y_data = label
-                self.name = ['light', 'angle', 'length', 'position']
 
             def __len__(self): 
                 return len(self.x_data)
@@ -201,39 +202,13 @@ def main():
         A
     )
     if args["cuda"]:
-        model.load_state_dict(torch.load(model_dir + '/model_DEAR.pth'))
+        model.load_state_dict(torch.load(model_dir + '/DRmodel_DEAR.pth'))
         model = model.to(device)
     else:
-        model.load_state_dict(torch.load(model_dir + '/model_DEAR.pth', 
+        model.load_state_dict(torch.load(model_dir + '/DRmodel_DEAR.pth', 
                                         map_location=torch.device('cpu')))
     #%%
-    beta = torch.tensor([[1, -1, 0.5, -0.5]]).to(device)
-    
-    """with 100 size of training dataset"""
-    dataloader = DataLoader(dataset, batch_size=2, shuffle=True)
-    targets_100 = []
-    representations_100 = []
-    for count, (x_batch, y_batch) in tqdm.tqdm(enumerate(iter(dataloader))):
-        if args["cuda"]:
-            x_batch = x_batch.cuda()
-            y_batch = y_batch.cuda()
-        
-        with torch.no_grad():
-            mean = model.encode(x_batch, mean=True)
-        targets_100.append(y_batch)
-        representations_100.append(mean)
-        
-        count += 1
-        if count == 50: break
-    targets_100 = torch.cat(targets_100, dim=0)
-    logit = torch.matmul(targets_100[:, :-1], beta.t())
-    targets_100 = torch.bernoulli(1 / (1 + torch.exp(-logit - 2*torch.sin(logit))))
-    representations_100 = torch.cat(representations_100, dim=0)[:, :len(label_idx)]
-    
-    downstream_dataset_100 = TensorDataset(representations_100, targets_100)
-    downstream_dataloader_100 = DataLoader(downstream_dataset_100, batch_size=32, shuffle=True)
-    #%%
-    """with all training dataset"""
+    """training dataset"""
     dataloader = DataLoader(dataset, batch_size=64, shuffle=True)
     targets = []
     representations = []
@@ -248,12 +223,15 @@ def main():
         representations.append(mean)
         
     targets = torch.cat(targets, dim=0)
-    logit = torch.matmul(targets[:, :-1], beta.t())
-    targets = torch.bernoulli(1 / (1 + torch.exp(-logit - 2*torch.sin(logit))))
-    representations = torch.cat(representations, dim=0)[:, :len(label_idx)]
+    background = targets[:, [-2]]
+    targets = targets[:, [-1]]
+    representations = torch.cat(representations, dim=0)[:, :len(label_idx)-1]
     
-    downstream_dataset = TensorDataset(representations, targets)
+    downstream_dataset = TensorDataset(representations, background, targets)
     downstream_dataloader = DataLoader(downstream_dataset, batch_size=64, shuffle=True)
+    
+    print('Train dataset label crosstab:')
+    print(crosstab(background.cpu().numpy(), targets.cpu().numpy())[1] / len(targets))
     #%%
     """test dataset"""
     test_dataloader = DataLoader(test_dataset, batch_size=64, shuffle=True)
@@ -270,98 +248,23 @@ def main():
         test_representations.append(mean)
         
     test_targets = torch.cat(test_targets, dim=0)
-    logit = torch.matmul(test_targets[:, :-1], beta.t())
-    test_targets = torch.bernoulli(1 / (1 + torch.exp(-logit - 2*torch.sin(logit))))
-    test_representations = torch.cat(test_representations, dim=0)[:, :len(label_idx)]
+    background = test_targets[:, [-2]]
+    test_targets = test_targets[:, [-1]]
+    test_representations = torch.cat(test_representations, dim=0)[:, :len(label_idx)-1]
     
-    test_downstream_dataset = TensorDataset(test_representations, test_targets)
+    test_downstream_dataset = TensorDataset(test_representations, background, test_targets)
     test_downstream_dataloader = DataLoader(test_downstream_dataset, batch_size=64, shuffle=True)
+    
+    print('Test dataset label crosstab:')
+    print(crosstab(background.cpu().numpy(), test_targets.cpu().numpy())[1] / len(test_targets))
     #%%
-    accuracy = []
-    accuracy_100 = []
+    accuracy_train = []
+    worst_accuracy_train = []
+    accuracy_test = []
+    worst_accuracy_test = []
     for repeat_num in range(10): # repeated experiments
     
-        print("Sample Efficiency with 100 labels")
-        downstream_classifier_100 = Classifier(len(label_idx), device)
-        downstream_classifier_100 = downstream_classifier_100.to(device)
-        
-        optimizer = torch.optim.Adam(
-            downstream_classifier_100.parameters(), 
-            lr=0.005
-        )
-        
-        downstream_classifier_100.train()
-        
-        for epoch in range(100):
-            logs = {
-                'loss': [], 
-            }
-            
-            for (x_batch, y_batch) in iter(downstream_dataloader_100):
-                
-                if args["cuda"]:
-                    x_batch = x_batch.cuda()
-                    y_batch = y_batch.cuda()
-                
-                # with torch.autograd.set_detect_anomaly(True):    
-                optimizer.zero_grad()
-                
-                pred = downstream_classifier_100(x_batch)
-                loss = F.binary_cross_entropy(pred, y_batch, reduction='none').mean()
-                
-                loss_ = []
-                loss_.append(('loss', loss))
-                
-                loss.backward()
-                optimizer.step()
-                    
-                """accumulate losses"""
-                for x, y in loss_:
-                    logs[x] = logs.get(x) + [y.item()]
-            
-            # accuracy
-            with torch.no_grad():
-                """train accuracy"""
-                train_correct = 0
-                for (x_batch, y_batch) in iter(downstream_dataloader_100):
-                    
-                    if args["cuda"]:
-                        x_batch = x_batch.cuda()
-                        y_batch = y_batch.cuda()
-                    
-                    pred = downstream_classifier_100(x_batch)
-                    pred = (pred > 0.5).float()
-                    train_correct += (pred == y_batch).float().sum().item()
-                train_correct /= downstream_dataset_100.__len__()
-                
-                """test accuracy"""
-                test_correct = 0
-                for (x_batch, y_batch) in iter(test_downstream_dataloader):
-                    
-                    if args["cuda"]:
-                        x_batch = x_batch.cuda()
-                        y_batch = y_batch.cuda()
-                    
-                    pred = downstream_classifier_100(x_batch)
-                    pred = (pred > 0.5).float()
-                    test_correct += (pred == y_batch).float().sum().item()
-                test_correct /= test_downstream_dataset.__len__()
-            
-            wandb.log({x : np.mean(y) for x, y in logs.items()})
-            wandb.log({'TrainACC(%)_100samples' : train_correct * 100})
-            wandb.log({'TestACC(%)_100samples' : test_correct * 100})
-        
-        print_input = "[Repeat {:02d}]".format(repeat_num + 1)
-        print_input += ''.join([', {}: {:.4f}'.format(x, np.mean(y)) for x, y in logs.items()])
-        print_input += ', TrainACC: {:.2f}%'.format(train_correct * 100)
-        print_input += ', TestACC: {:.2f}%'.format(test_correct * 100)
-        print(print_input)
-        
-        # log accuracy
-        accuracy_100.append(test_correct)
-        
-        print("Sample Efficiency with all labels")
-        downstream_classifier = Classifier(len(label_idx), device)
+        downstream_classifier = Classifier(len(label_idx)-1, device)
         downstream_classifier = downstream_classifier.to(device)
         
         optimizer = torch.optim.Adam(
@@ -371,15 +274,16 @@ def main():
         
         downstream_classifier.train()
         
-        for epoch in range(100):
+        for epoch in range(500):
             logs = {
                 'loss': [], 
             }
             
-            for (x_batch, y_batch) in iter(downstream_dataloader):
+            for (x_batch, background_batch, y_batch) in iter(downstream_dataloader):
                 
                 if args["cuda"]:
                     x_batch = x_batch.cuda()
+                    background_batch = background_batch.cuda()
                     y_batch = y_batch.cuda()
                 
                 # with torch.autograd.set_detect_anomaly(True):    
@@ -402,51 +306,76 @@ def main():
             with torch.no_grad():
                 """train accuracy"""
                 train_correct = 0
-                for (x_batch, y_batch) in iter(downstream_dataloader):
+                worst_train_correct = 0
+                worst_count = 0
+                for (x_batch, background_batch, y_batch) in iter(downstream_dataloader):
                     
                     if args["cuda"]:
                         x_batch = x_batch.cuda()
+                        background_batch = background_batch.cuda()
                         y_batch = y_batch.cuda()
                     
                     pred = downstream_classifier(x_batch)
                     pred = (pred > 0.5).float()
                     train_correct += (pred == y_batch).float().sum().item()
+                    
+                    opposite = torch.where((background_batch - y_batch) != 0)[0]
+                    worst_train_correct += (pred[opposite] == y_batch[opposite]).float().sum().item()
+                    worst_count += len(opposite)
+                    
                 train_correct /= downstream_dataset.__len__()
+                worst_train_correct /= worst_count
                 
                 """test accuracy"""
                 test_correct = 0
-                for (x_batch, y_batch) in iter(test_downstream_dataloader):
+                worst_test_correct = 0
+                worst_count = 0
+                for (x_batch, background_batch, y_batch) in iter(test_downstream_dataloader):
                     
                     if args["cuda"]:
                         x_batch = x_batch.cuda()
+                        background_batch = background_batch.cuda()
                         y_batch = y_batch.cuda()
                     
                     pred = downstream_classifier(x_batch)
                     pred = (pred > 0.5).float()
                     test_correct += (pred == y_batch).float().sum().item()
+                    
+                    opposite = torch.where((background_batch - y_batch) != 0)[0]
+                    worst_test_correct += (pred[opposite] == y_batch[opposite]).float().sum().item()
+                    worst_count += len(opposite)
+                    
                 test_correct /= test_downstream_dataset.__len__()
-            
+                worst_test_correct /= worst_count
+                
             wandb.log({x : np.mean(y) for x, y in logs.items()})
-            wandb.log({'TrainACC(%)' : train_correct * 100})
-            wandb.log({'TestACC(%)' : test_correct * 100})
+            wandb.log({'AvgTrainACC(%)' : train_correct * 100})
+            wandb.log({'AvgTestACC(%)' : test_correct * 100})
+            wandb.log({'WorstTrainACC(%)' : worst_train_correct * 100})
+            wandb.log({'WorstTestACC(%)' : worst_test_correct * 100})
         
         print_input = "[Repeat {:02d}]".format(repeat_num + 1)
         print_input += ''.join([', {}: {:.4f}'.format(x, np.mean(y)) for x, y in logs.items()])
-        print_input += ', TrainACC: {:.2f}%'.format(train_correct * 100)
-        print_input += ', TestACC: {:.2f}%'.format(test_correct * 100)
+        print_input += ', AvgTrainACC: {:.2f}%'.format(train_correct * 100)
+        print_input += ', AvgTestACC: {:.2f}%'.format(test_correct * 100)
+        print_input += ', WorstTrainACC: {:.2f}%'.format(worst_train_correct * 100)
+        print_input += ', WorstTestACC: {:.2f}%'.format(worst_test_correct * 100)
         print(print_input)
-            
+        
         # log accuracy
-        accuracy.append(test_correct)
+        accuracy_train.append(train_correct)
+        worst_accuracy_train.append(worst_train_correct)
+        accuracy_test.append(test_correct)
+        worst_accuracy_test.append(worst_test_correct)
     #%%
     """log Accuracy"""
-    sample_efficiency = np.array(accuracy_100).mean() / np.array(accuracy).mean()
-    if not os.path.exists('./assets/sample_efficiency/'): 
-        os.makedirs('./assets/sample_efficiency/')
-    with open('./assets/sample_efficiency/DEAR_{}.txt'.format(args['num']), 'w') as f:
-        f.write('100 samples accuracy: {:.4f}\n'.format(np.array(accuracy_100).mean()))
-        f.write('all samples accuracy: {:.4f}\n'.format(np.array(accuracy).mean()))
-        f.write('sample efficiency: {:.4f}\n'.format(sample_efficiency))
+    if not os.path.exists('./assets/robustness/'): 
+        os.makedirs('./assets/robustness/')
+    with open('./assets/robustness/{}_{}_{}.txt'.format(args["model"], args["scm"], args['num']), 'w') as f:
+        f.write('train average accuracy: {:.4f}\n'.format(np.array(accuracy_train).mean()))
+        f.write('train worst accuracy: {:.4f}\n'.format(np.array(worst_accuracy_train).mean()))
+        f.write('test average accuracy: {:.4f}\n'.format(np.array(accuracy_test).mean()))
+        f.write('test worst accuracy: {:.4f}\n'.format(np.array(worst_accuracy_test).mean()))
     #%%
     wandb.run.finish()
 #%%
