@@ -70,10 +70,6 @@ def get_args(debug):
  
 	parser.add_argument('--seed', type=int, default=2, 
 						help='seed for repeatable results')
-	parser.add_argument("--DR", default=False, action='store_true',
-                        help="If True, training model with spurious attribute")
-	# parser.add_argument("--DR", default=True, type=bool,
-    #                     help="If True, training model with spurious attribute")
 
 	parser.add_argument("--z_dim", default=4, type=int,
                         help="the number of latent dimension")
@@ -165,12 +161,8 @@ def main():
 	"""dataset"""
 	class CustomDataset(Dataset): 
 		def __init__(self, args):
-			if args["DR"]:
-				foldername = 'pendulum_DR'
-				self.name = ['light', 'angle', 'length', 'position', 'background', 'target']
-			else:
-				foldername = 'pendulum_real'
-				self.name = ['light', 'angle', 'length', 'position', 'target']
+			foldername = 'pendulum_real'
+			self.name = ['light', 'angle', 'length', 'position', 'target']
 			train_imgs = [x for x in os.listdir('./modules/causal_data/{}/train'.format(foldername)) if x.endswith('png')]
    
 			train_x = []
@@ -237,18 +229,11 @@ def main():
 	wandb.log({'reconstruction': wandb.Image(fig)})
 
 	"""model save"""
-	if args["DR"]:
-		torch.save(lvae.state_dict(), './assets/DRmodel_{}.pth'.format('CausalVAE'))
-		artifact = wandb.Artifact('DRmodel_{}'.format('CausalVAE'), 
-									type='model',
-									metadata=args) # description=""
-		artifact.add_file('./assets/DRmodel_{}.pth'.format('CausalVAE'))
-	else:
-		torch.save(lvae.state_dict(), './assets/model_{}.pth'.format('CausalVAE'))
-		artifact = wandb.Artifact('model_{}'.format('CausalVAE'), 
-									type='model',
-									metadata=args) # description=""
-		artifact.add_file('./assets/model_{}.pth'.format('CausalVAE'))
+	torch.save(lvae.state_dict(), './assets/model_{}.pth'.format('CausalVAE'))
+	artifact = wandb.Artifact('model_{}'.format('CausalVAE'), 
+								type='model',
+								metadata=args) # description=""
+	artifact.add_file('./assets/model_{}.pth'.format('CausalVAE'))
 	wandb.log_artifact(artifact)
     #%%
 	wandb.run.finish()
