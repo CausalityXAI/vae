@@ -141,16 +141,16 @@ def main():
         def __init__(self, args):
             foldername = 'pendulum_DR'
             self.name = ['light', 'angle', 'length', 'position', 'background', 'target']
-            train_imgs = [x for x in os.listdir('./modules/causal_data/{}/train'.format(foldername)) if x.endswith('png')]
+            test_imgs = [x for x in os.listdir('./modules/causal_data/{}/test'.format(foldername)) if x.endswith('png')]
 
-            train_x = []
-            for i in tqdm.tqdm(range(len(train_imgs)), desc="train data loading"):
-                train_x.append(np.array(
-                    Image.open("./modules/causal_data/{}/train/{}".format(foldername, train_imgs[i])).resize((args["image_size"], args["image_size"]))
+            test_x = []
+            for i in tqdm.tqdm(range(len(test_imgs)), desc="test data loading"):
+                test_x.append(np.array(
+                    Image.open("./modules/causal_data/{}/test/{}".format(foldername, test_imgs[i])).resize((args["image_size"], args["image_size"]))
                     )[:, :, :3])
-            self.x_data = np.array(train_x).astype(float) / 255.
+            self.x_data = np.array(test_x).astype(float) / 255.
 
-            label = np.array([x[:-4].split('_')[1:] for x in train_imgs]).astype(float)
+            label = np.array([x[:-4].split('_')[1:] for x in test_imgs]).astype(float)
             self.std = label.std(axis=0)
             """label standardization"""
             if args["label_standardization"]: 
