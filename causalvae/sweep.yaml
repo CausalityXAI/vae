@@ -1,8 +1,8 @@
 project: CausalDisentangled
 # program: main.py
 # program: inference.py
-program: sample_efficiency.py
-# program: metric.py
+# program: sample_efficiency.py
+program: metric.py
 method: grid
 # metric:
 #   goal: minimize
