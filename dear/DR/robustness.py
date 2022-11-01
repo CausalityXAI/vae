@@ -371,7 +371,7 @@ def main():
     """log Accuracy"""
     if not os.path.exists('./assets/robustness/'): 
         os.makedirs('./assets/robustness/')
-    with open('./assets/robustness/{}_{}_{}.txt'.format(args["model"], args["scm"], args['num']), 'w') as f:
+    with open('./assets/robustness/DR_{}_{}.txt'.format("DEAR", args['num']), 'w') as f:
         f.write('train average accuracy: {:.4f}\n'.format(np.array(accuracy_train).mean()))
         f.write('train worst accuracy: {:.4f}\n'.format(np.array(worst_accuracy_train).mean()))
         f.write('test average accuracy: {:.4f}\n'.format(np.array(accuracy_test).mean()))
