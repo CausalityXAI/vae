@@ -229,7 +229,7 @@ def main():
         
         downstream_classifier.train()
         
-        for epoch in range(500):
+        for epoch in range(200):
             logs = {
                 'loss': [], 
             }
@@ -326,7 +326,7 @@ def main():
     """log Accuracy"""
     if not os.path.exists('./assets/robustness/'): 
         os.makedirs('./assets/robustness/')
-    with open('./assets/robustness/{}_{}.txt'.format("CausalVAE",  args['num']), 'w') as f:
+    with open('./assets/robustness/DR_{}_{}.txt'.format("CausalVAE",  args['num']), 'w') as f:
         f.write('train average accuracy: {:.4f}\n'.format(np.array(accuracy_train).mean()))
         f.write('train worst accuracy: {:.4f}\n'.format(np.array(worst_accuracy_train).mean()))
         f.write('test average accuracy: {:.4f}\n'.format(np.array(accuracy_test).mean()))
