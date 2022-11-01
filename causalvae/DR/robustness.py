@@ -201,7 +201,7 @@ def main():
             y_batch = y_batch.cuda()
         
         with torch.no_grad():
-            _, _, _, _, _, _, f_z1, _, _, _ = lvae.encode(x_batch, y_batch[:, :4], sample=False)
+            _, _, _, _, _, _, f_z1, _, _, _ = lvae.encode(x_batch, y_batch[:, :5], sample=False)
         test_targets.append(y_batch)
         test_representations.append(f_z1.squeeze(dim=-1))
         
