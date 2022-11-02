@@ -74,7 +74,7 @@ for light_angle, pendulum_angle in tqdm.tqdm(zip(light_angle_list, pendulum_angl
     """data corruption: 20%"""
     if (count + 1) % 5 == 0:
         xi_3 = np.random.uniform(low=0, high=12)
-        xi_3 = np.random.uniform(low=0, high=12)
+        xi_4 = np.random.uniform(low=0, high=12)
     
     """target label"""
     logit = sum([b*x for b,x in zip(beta, [xi_1, xi_2, xi_3, xi_4])])
