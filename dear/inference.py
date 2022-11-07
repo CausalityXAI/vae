@@ -180,6 +180,7 @@ def main():
                 ax[idx, k].imshow((xhat[k].cpu().permute(1, 2, 0) + 1) / 2)
                 ax[idx, k].axis('off')
     
+    plt.tight_layout()
     plt.savefig('{}/do.png'.format(model_dir), bbox_inches='tight')
     # plt.show()
     plt.close()
