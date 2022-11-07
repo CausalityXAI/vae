@@ -10,5 +10,5 @@ print_every: 5
 n_epochs: 1000 
 prior: "linscm" 
 sup_prop: 1
-sup_coef: 5
+sup_coef: 20
 sup_type: "ce"
