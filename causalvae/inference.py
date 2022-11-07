@@ -191,6 +191,7 @@ def main():
                 ax[i, k].imshow(torch.sigmoid(reconstructed_image[0]).detach().cpu().numpy())
                 ax[i, k].axis('off')    
     
+    plt.tight_layout()
     plt.savefig('{}/do.png'.format(model_dir), bbox_inches='tight')
     # plt.show()
     plt.close()
