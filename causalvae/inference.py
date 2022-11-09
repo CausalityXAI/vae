@@ -177,16 +177,16 @@ def main():
         u = u.cuda()
         l = l.cuda()
     
-    fig, ax = plt.subplots(4, 9, figsize=(10, 4))
+    fig, ax = plt.subplots(4, 7, figsize=(7, 4))
     
     for i in range(4): # masking node index
         if i < 2:
-            for k, j in enumerate(np.linspace(causal_range[i][0], causal_range[i][1], 9)): # do-intervention value
+            for k, j in enumerate(np.linspace(causal_range[i][0], causal_range[i][1], 7)): # do-intervention value
                 _, _, _, _, reconstructed_image, _= lvae.negative_elbo_bound(u, l, i, sample = False, adj=j)
                 ax[i, k].imshow(torch.sigmoid(reconstructed_image[0]).detach().cpu().numpy())
                 ax[i, k].axis('off')    
         else:
-            for k, j in enumerate(np.linspace(causal_range[i][0], causal_range[i][1], 9)): # do-intervention value
+            for k, j in enumerate(np.linspace(causal_range[i][0], causal_range[i][1], 7)): # do-intervention value
                 _, _, _, _, reconstructed_image, _= lvae.negative_elbo_bound(u, l, i, sample = False, adj=j)
                 ax[i, k].imshow(torch.sigmoid(reconstructed_image[0]).detach().cpu().numpy())
                 ax[i, k].axis('off')    
