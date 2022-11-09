@@ -44,7 +44,7 @@ except:
 wandb.init(
     project="CausalDisentangled", 
     entity="anseunghwan",
-    tags=["Inference"],
+    tags=["DEAR", "Inference"],
 )
 #%%
 import argparse
@@ -147,7 +147,7 @@ def main():
     wandb.log({'B_est': wandb.Image(fig)})
     #%%
     """do-intervention"""
-    n = 9
+    n = 7
     gap = 3
     traversals = torch.linspace(-gap, gap, steps=n)
     
@@ -155,7 +155,7 @@ def main():
     z = torch.zeros(1, args["latent_dim"], device=device)
     z = z.expand(n, model.latent_dim)
     
-    fig, ax = plt.subplots(4, 9, figsize=(10, 4))
+    fig, ax = plt.subplots(4, n, figsize=(n, 4))
     
     for idx in range(dim):
         z_inv = model.prior.enc_nlr(z)
