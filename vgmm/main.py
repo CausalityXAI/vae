@@ -2,6 +2,7 @@
 """
 Reference:
 [1] https://zhiyzuo.github.io/VI/#python-implementation
+[2] https://brunomaga.github.io/Variational-Inference-GMM
 """
 #%%
 import os
