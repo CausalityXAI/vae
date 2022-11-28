@@ -14,7 +14,9 @@ class TVAE(nn.Module):
         
         """encoder"""
         self.encoder = nn.Sequential(
-            nn.Linear(config["input_dim"], 16),
+            nn.Linear(config["input_dim"], 32),
+            nn.ReLU(),
+            nn.Linear(32, 16),
             nn.ReLU(),
             nn.Linear(16, 16),
             nn.ReLU(),
@@ -27,7 +29,9 @@ class TVAE(nn.Module):
             nn.ReLU(),
             nn.Linear(16, 16),
             nn.ReLU(),
-            nn.Linear(16, config["input_dim"]),
+            nn.Linear(16, 32),
+            nn.ReLU(),
+            nn.Linear(32, config["input_dim"]),
         ).to(device)
         self.sigma = nn.Parameter(torch.ones(config["input_dim"]) * 0.1)
         

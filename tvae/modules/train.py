@@ -15,7 +15,7 @@ def train(output_info_list, dataset, dataloader, model, config, optimizer, devic
         'KL': [],
     }
     # for debugging
-    for i in range(config["latent_dim"]):
+    for i in range(config["node"]):
         logs['posterior_variance{}'.format(i+1)] = []
     
     for (x_batch, ) in tqdm.tqdm(iter(dataloader), desc="inner loop"):
@@ -53,14 +53,14 @@ def train(output_info_list, dataset, dataloader, model, config, optimizer, devic
         KL = torch.pow(mean, 2).sum(axis=1)
         KL -= logvar.sum(axis=1)
         KL += torch.exp(logvar).sum(axis=1)
-        KL -= config["latent_dim"]
+        KL -= config["node"]
         KL *= 0.5
         KL = KL.mean()
         loss_.append(('KL', KL))
         
         ### posterior variance: for debugging
         var_ = torch.exp(logvar).mean(axis=0)
-        for i in range(config["latent_dim"]):
+        for i in range(config["node"]):
             loss_.append(('posterior_variance{}'.format(i+1), var_[i]))
         
         loss = recon + KL 
@@ -68,7 +68,7 @@ def train(output_info_list, dataset, dataloader, model, config, optimizer, devic
         
         loss.backward()
         optimizer.step()
-        model.sigma.data.clamp_(0.01, 1.0)
+        model.sigma.data.clamp_(0.01, 0.1)
             
         """accumulate losses"""
         for x, y in loss_:
