@@ -86,6 +86,7 @@ def main():
     
     model.eval()
     #%%
+    """dataset"""
     df = pd.read_csv('./data/Bank_Personal_Loan_Modelling.csv')
     df = df.sample(frac=1, random_state=1).reset_index(drop=True)
     df = df.drop(columns=['ID'])
@@ -122,6 +123,7 @@ def main():
     fig = Image.open('./assets/loan/dag_train_loan.png')
     wandb.log({'Baseline DAG (Train)': wandb.Image(fig)})
     #%%
+    """train dataset representation"""
     train_recon = []
     for (x_batch, ) in tqdm.tqdm(iter(dataloader), desc="inner loop"):
         if config["cuda"]:
@@ -133,6 +135,7 @@ def main():
     train_recon = torch.cat(train_recon, dim=0)
     train_recon = transformer.inverse_transform(train_recon, model.sigma.detach().cpu().numpy())
     #%%
+    """PC algorithm : train dataset representation"""
     cg = pc(data=train_recon.to_numpy(), 
             alpha=0.05, 
             indep_test='fisherz') 
@@ -152,12 +155,13 @@ def main():
     fig = Image.open('./assets/loan/dag_recon_train_loan.png')
     wandb.log({'Reconstructed DAG (Train)': wandb.Image(fig)})
     #%%
+    """synthetic dataset"""
     torch.manual_seed(config["seed"])
     steps = len(train) // config["batch_size"] + 1
     data = []
     with torch.no_grad():
         for _ in range(steps):
-            mean = torch.zeros(config["batch_size"], config["latent_dim"])
+            mean = torch.zeros(config["batch_size"], config["nodd3"])
             std = mean + 1
             noise = torch.normal(mean=mean, std=std).to(device)
             fake = model.decoder(noise)
@@ -167,6 +171,7 @@ def main():
     data = data[:len(train)]
     sample_df = transformer.inverse_transform(data, model.sigma.detach().cpu().numpy())
     #%%
+    """PC algorithm : synthetic dataset"""
     cg = pc(data=sample_df.to_numpy(), 
             alpha=0.05, 
             indep_test='fisherz') 

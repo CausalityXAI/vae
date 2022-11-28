@@ -18,12 +18,12 @@ class TVAE(nn.Module):
             nn.ReLU(),
             nn.Linear(16, 16),
             nn.ReLU(),
-            nn.Linear(16, config["latent_dim"] * 2),
+            nn.Linear(16, config["node"] * 2),
         ).to(device)
         
         """decoder"""
         self.decoder = nn.Sequential(
-            nn.Linear(config["latent_dim"], 16),
+            nn.Linear(config["node"], 16),
             nn.ReLU(),
             nn.Linear(16, 16),
             nn.ReLU(),
@@ -32,8 +32,8 @@ class TVAE(nn.Module):
         self.sigma = nn.Parameter(torch.ones(config["input_dim"]) * 0.1)
         
     def get_posterior(self, input):
-        h = self.encoder(nn.Flatten()(input)) # [batch, latent_dim * 2]
-        mean, logvar = torch.split(h, self.config["latent_dim"], dim=1)
+        h = self.encoder(nn.Flatten()(input)) # [batch, node * 2]
+        mean, logvar = torch.split(h, self.config["node"], dim=1)
         return mean, logvar
     
     def encode(self, input, deterministic=False):
@@ -43,7 +43,7 @@ class TVAE(nn.Module):
         if deterministic:
             latent = mean
         else:
-            noise = torch.randn(input.size(0), self.config["latent_dim"]).to(self.device) 
+            noise = torch.randn(input.size(0), self.config["node"]).to(self.device) 
             latent = mean + torch.exp(logvar / 2) * noise
         return mean, logvar, latent
     
@@ -61,7 +61,7 @@ def main():
     config = {
         "input_dim": 5,
         "n": 10,
-        "latent_dim": 3,
+        "node": 3,
     }
     """TVAE"""
     model = TVAE(config, 'cpu')
@@ -71,9 +71,9 @@ def main():
     
     mean, logvar, latent, xhat = model(batch)
     
-    assert mean.shape == (config["n"], config["latent_dim"])
-    assert logvar.shape == (config["n"], config["latent_dim"])
-    assert latent.shape == (config["n"], config["latent_dim"])
+    assert mean.shape == (config["n"], config["node"])
+    assert logvar.shape == (config["n"], config["node"])
+    assert latent.shape == (config["n"], config["node"])
     assert xhat.shape == (config["n"], config["input_dim"])
     
     print("TVAE pass test!")

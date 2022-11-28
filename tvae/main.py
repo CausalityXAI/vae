@@ -56,7 +56,7 @@ def get_args(debug):
     parser.add_argument('--seed', type=int, default=1, 
                         help='seed for repeatable results')
 
-    parser.add_argument("--latent_dim", default=3, type=int,
+    parser.add_argument("--node", default=3, type=int,
                         help="the number of nodes")
     
     # optimization options
