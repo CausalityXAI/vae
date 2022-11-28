@@ -14,16 +14,20 @@ class TVAE(nn.Module):
         
         """encoder"""
         self.encoder = nn.Sequential(
-            nn.Linear(config["input_dim"], 4),
-            nn.ELU(),
-            nn.Linear(4, config["latent_dim"] * 2),
+            nn.Linear(config["input_dim"], 16),
+            nn.ReLU(),
+            nn.Linear(16, 16),
+            nn.ReLU(),
+            nn.Linear(16, config["latent_dim"] * 2),
         ).to(device)
         
         """decoder"""
         self.decoder = nn.Sequential(
-            nn.Linear(config["latent_dim"], 4),
-            nn.ELU(),
-            nn.Linear(4, config["input_dim"]),
+            nn.Linear(config["latent_dim"], 16),
+            nn.ReLU(),
+            nn.Linear(16, 16),
+            nn.ReLU(),
+            nn.Linear(16, config["input_dim"]),
         ).to(device)
         self.sigma = nn.Parameter(torch.ones(config["input_dim"]) * 0.1)
         
