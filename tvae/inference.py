@@ -136,6 +136,7 @@ def main():
     train_recon = transformer.inverse_transform(train_recon, model.sigma.detach().cpu().numpy())
     #%%
     """PC algorithm : train dataset representation"""
+    train_recon = (train_recon - train_recon.mean(axis=0)) / train_recon.std(axis=0)
     cg = pc(data=train_recon.to_numpy(), 
             alpha=0.05, 
             indep_test='fisherz') 
@@ -161,7 +162,7 @@ def main():
     data = []
     with torch.no_grad():
         for _ in range(steps):
-            mean = torch.zeros(config["batch_size"], config["nodd3"])
+            mean = torch.zeros(config["batch_size"], config["node"])
             std = mean + 1
             noise = torch.normal(mean=mean, std=std).to(device)
             fake = model.decoder(noise)
@@ -172,6 +173,7 @@ def main():
     sample_df = transformer.inverse_transform(data, model.sigma.detach().cpu().numpy())
     #%%
     """PC algorithm : synthetic dataset"""
+    sample_df = (sample_df - sample_df.mean(axis=0)) / sample_df.std(axis=0)
     cg = pc(data=sample_df.to_numpy(), 
             alpha=0.05, 
             indep_test='fisherz') 
