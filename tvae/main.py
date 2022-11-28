@@ -64,7 +64,7 @@ def get_args(debug):
                         help='maximum iteration')
     parser.add_argument('--batch_size', default=256, type=int,
                         help='batch size')
-    parser.add_argument('--lr', default=0.005 type=float,
+    parser.add_argument('--lr', default=0.005, type=float,
                         help='learning rate')
     parser.add_argument('--weight_decay', default=1e-5, type=float, 
                         help='weight decay parameter')
@@ -120,62 +120,6 @@ def main():
         
         """update log"""
         wandb.log({x : np.mean(y) for x, y in logs.items()})
-    #%%
-    # model.eval()
-    # torch.manual_seed(config["seed"])
-    # steps = dataset.__len__() // config["batch_size"] + 1
-    # data = []
-    # with torch.no_grad():
-    #     for _ in range(steps):
-    #         mean = torch.zeros(config["batch_size"], config["latent_dim"])
-    #         std = mean + 1
-    #         noise = torch.normal(mean=mean, std=std).to(device)
-    #         fake = model.decoder(noise)
-    #         fake = torch.tanh(fake)
-    #         data.append(fake.numpy())
-    # data = np.concatenate(data, axis=0)
-    # data = data[:dataset.__len__()]
-    # sample_df = transformer.inverse_transform(data, model.sigma.detach().cpu().numpy())
-    # #%%
-    # from causallearn.search.ConstraintBased.PC import pc
-    # from causallearn.utils.GraphUtils import GraphUtils
-    
-    # if not os.path.exists('./assets/loan'):
-    #     os.makedirs('./assets/loan')
-    
-    # df_ = (df - df.mean(axis=0)) / df.std(axis=0)
-    # train = df_.iloc[:4000]
-    
-    # cg = pc(data=train.to_numpy(), 
-    #         alpha=0.05, 
-    #         indep_test='chisq') 
-    # print(cg.G)
-    # trainG = cg.G.graph
-    
-    # # visualization
-    # pdy = GraphUtils.to_pydot(cg.G, labels=df.columns)
-    # pdy.write_png('./assets/loan/dag_train_loan.png')
-    # fig = Image.open('./assets/loan/dag_train_loan.png')
-    # # wandb.log({'Baseline DAG (Train)': wandb.Image(fig)})
-    # #%%    
-    # cg = pc(data=sample_df.to_numpy(), 
-    #         alpha=0.05, 
-    #         indep_test='fisherz') 
-    # print(cg.G)
-    
-    # # SHD: https://arxiv.org/pdf/1306.1043.pdf
-    # sampleSHD = (np.triu(trainG) != np.triu(cg.G.graph)).sum() # unmatch in upper-triangular
-    # nonzero_idx = np.where(np.triu(cg.G.graph) != 0)
-    # flag = np.triu(trainG)[nonzero_idx] == np.triu(cg.G.graph)[nonzero_idx]
-    # nonzero_idx = (nonzero_idx[1][flag], nonzero_idx[0][flag])
-    # sampleSHD += (np.tril(trainG)[nonzero_idx] != np.tril(cg.G.graph)[nonzero_idx]).sum()
-    # # wandb.log({'SHD (Sample)': sampleSHD})
-    
-    # # visualization
-    # pdy = GraphUtils.to_pydot(cg.G, labels=sample_df.columns)
-    # pdy.write_png('./assets/loan/dag_recon_sample_loan.png')
-    # fig = Image.open('./assets/loan/dag_recon_sample_loan.png')
-    # # wandb.log({'Reconstructed DAG (Sampled)': wandb.Image(fig)})
     #%%
     """model save"""
     torch.save(model.state_dict(), './assets/TVAE.pth')
