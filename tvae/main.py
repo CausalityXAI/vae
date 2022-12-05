@@ -1,6 +1,6 @@
 #%%
 import os
-# os.environ['KMP_DUPLICATE_LIB_OK']='True'
+os.environ['KMP_DUPLICATE_LIB_OK']='True'
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
 #%%
 import numpy as np
@@ -8,7 +8,7 @@ import pandas as pd
 import tqdm
 from PIL import Image
 import matplotlib.pyplot as plt
-# plt.switch_backend('agg')
+plt.switch_backend('agg')
 
 import torch
 from torch import nn
@@ -20,7 +20,7 @@ from modules.simulation import set_random_seed
 
 from modules.model import TVAE
 
-from modules.data_transformer import DataTransformer
+from modules.datasets import generate_dataset
 
 from modules.train import train
 #%%
@@ -55,6 +55,8 @@ def get_args(debug):
     
     parser.add_argument('--seed', type=int, default=1, 
                         help='seed for repeatable results')
+    parser.add_argument('--dataset', type=str, default='loan', 
+                        help='Dataset options: loan, adult, covtype')
 
     parser.add_argument("--node", default=3, type=int,
                         help="the number of nodes")
@@ -68,6 +70,8 @@ def get_args(debug):
                         help='learning rate')
     parser.add_argument('--weight_decay', default=1e-5, type=float, 
                         help='weight decay parameter')
+    parser.add_argument('--sigma_range', default=[0.01, 0.1], type=arg_as_list,
+                        help='range of observational noise')
     
     if debug:
         return parser.parse_args(args=[])
@@ -87,19 +91,21 @@ def main():
         torch.cuda.manual_seed(config["seed"])
     #%%
     """dataset"""
-    df = pd.read_csv('./data/Bank_Personal_Loan_Modelling.csv')
-    df = df.sample(frac=1, random_state=1).reset_index(drop=True)
-    df = df.drop(columns=['ID'])
-    continuous = ['CCAvg', 'Mortgage', 'Income', 'Experience', 'Age']
-    df = df[continuous].iloc[:4000]
-    
-    transformer = DataTransformer()
-    transformer.fit(df)
-    train_data = transformer.transform(df)
-    dataset = TensorDataset(torch.from_numpy(train_data.astype('float32')).to(device))
-    dataloader = DataLoader(dataset, batch_size=config["batch_size"], shuffle=True, drop_last=False)    
+    dataset, dataloader, transformer = generate_dataset(config, device, random_state=0)
     
     config["input_dim"] = transformer.output_dimensions
+    #%%
+    if config["dataset"] == 'loan':
+        config["node"] = 3
+    
+    elif config["dataset"] == 'adult':
+        config["node"] = 3
+    
+    elif config["dataset"] == 'covtype':
+        config["node"] = 6
+        
+    else:
+        raise ValueError('Not supported dataset!')
     #%%
     model = TVAE(config, device).to(device)
 
@@ -122,15 +128,16 @@ def main():
         wandb.log({x : np.mean(y) for x, y in logs.items()})
     #%%
     """model save"""
-    torch.save(model.state_dict(), './assets/TVAE.pth')
-    artifact = wandb.Artifact('TVAE', 
+    torch.save(model.state_dict(), './assets/TVAE_{}.pth'.format(config["dataset"]))
+    artifact = wandb.Artifact('TVAE_{}'.format(config["dataset"]), 
                             type='model',
                             metadata=config) # description=""
-    artifact.add_file('./assets/TVAE.pth')
+    artifact.add_file('./assets/TVAE_{}.pth'.format(config["dataset"]))
     artifact.add_file('./main.py')
     artifact.add_file('./modules/model.py')
     wandb.log_artifact(artifact)
     #%%
+    wandb.config.update(config, allow_val_change=True)
     wandb.run.finish()
 #%%
 if __name__ == '__main__':

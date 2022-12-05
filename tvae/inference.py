@@ -20,7 +20,11 @@ from modules.simulation import set_random_seed
 
 from modules.model import TVAE
 
-from modules.data_transformer import DataTransformer
+from modules.datasets import generate_dataset
+
+import statsmodels.api as sm
+from sklearn.metrics import f1_score
+from sklearn.ensemble import RandomForestClassifier
 #%%
 import sys
 import subprocess
@@ -55,11 +59,16 @@ def main():
     #%%
     config = vars(get_args(debug=False)) # default configuration
     
+    dataset = 'loan'
+    # dataset = 'adult'
+    # dataset = 'covtype'
+    
     """model load"""
     artifact = wandb.use_artifact(
-        'anseunghwan/CausalDisentangled/TVAE:v{}'.format(config["num"]), type='model')
+        'anseunghwan/CausalDisentangled/TVAE_{}:v{}'.format(dataset, config["num"]), type='model')
     for key, item in artifact.metadata.items():
         config[key] = item
+    assert dataset == config["dataset"]
     model_dir = artifact.download()
     
     config["cuda"] = torch.cuda.is_available()
@@ -75,52 +84,81 @@ def main():
     model = TVAE(config, device).to(device)
     
     if config["cuda"]:
+        model_name = [x for x in os.listdir(model_dir) if x.endswith('pth')][0]
         model.load_state_dict(
             torch.load(
-                model_dir + '/TVAE.pth'))
+                model_dir + '/' + model_name))
     else:
+        model_name = [x for x in os.listdir(model_dir) if x.endswith('pth')][0]
         model.load_state_dict(
             torch.load(
-                model_dir + '/TVAE.pth', 
-                    map_location=torch.device('cpu')))
+                model_dir + '/' + model_name, map_location=torch.device('cpu')))
     
     model.eval()
     #%%
     """dataset"""
-    df = pd.read_csv('./data/Bank_Personal_Loan_Modelling.csv')
-    df = df.sample(frac=1, random_state=1).reset_index(drop=True)
-    df = df.drop(columns=['ID'])
-    continuous = ['CCAvg', 'Mortgage', 'Income', 'Experience', 'Age']
-    df = df[continuous]
-    
-    df_ = (df - df.mean(axis=0)) / df.std(axis=0)
-    train = df_.iloc[:4000]
-    test = df_.iloc[4000:]
-    
-    transformer = DataTransformer()
-    transformer.fit(df.iloc[:4000])
-    train_data = transformer.transform(df.iloc[:4000])
-    dataset = TensorDataset(torch.from_numpy(train_data.astype('float32')).to(device))
-    dataloader = DataLoader(dataset, batch_size=config["batch_size"], shuffle=True, drop_last=False)    
+    dataset, dataloader, transformer = generate_dataset(config, device, random_state=0)
     
     config["input_dim"] = transformer.output_dimensions
     #%%
+    if not os.path.exists('./assets/{}'.format(config["dataset"])):
+        os.makedirs('./assets/{}'.format(config["dataset"]))
+    
     from causallearn.search.ConstraintBased.PC import pc
     from causallearn.utils.GraphUtils import GraphUtils
     
-    if not os.path.exists('./assets/loan'):
-        os.makedirs('./assets/loan')
+    if config["dataset"] == 'loan':
+        df = pd.read_csv('./data/Bank_Personal_Loan_Modelling.csv')
+        df = df.sample(frac=1, random_state=1).reset_index(drop=True)
+        df = df.drop(columns=['ID'])
+        continuous = ['CCAvg', 'Mortgage', 'Income', 'Experience', 'Age']
+        df = df[continuous]
+        
+        df_ = (df - df.mean(axis=0)) / df.std(axis=0)
+        train = df_.iloc[:4000]
+        test = df_.iloc[4000:]
+        
+        i_test = 'chisq'
+        
+    elif config["dataset"] == 'adult':
+        df = pd.read_csv('./data/adult.csv')
+        df = df.sample(frac=1, random_state=1).reset_index(drop=True)
+        df = df[(df == '?').sum(axis=1) == 0]
+        df['income'] = df['income'].map({'<=50K': 0, '>50K': 1, '<=50K.': 0, '>50K.': 1})
+        df = df[dataset.continuous]
+        
+        # scaling = [x for x in dataset.continuous if x != 'income']
+        # df_ = df.copy()
+        # df_[scaling] = (df[scaling] - df[scaling].mean(axis=0)) / df[scaling].std(axis=0)
+        train = df.iloc[:40000]
+        test = df.iloc[40000:]
+        
+        i_test = 'chisq'
+        
+    elif config["dataset"] == 'covtype':
+        df = pd.read_csv('./data/covtype.csv')
+        df = df.sample(frac=1, random_state=5).reset_index(drop=True)
+        df = df[dataset.continuous]
+        df = df.dropna(axis=0)
+        
+        train = df.iloc[2000:, ]
+        test = df.iloc[:2000, ]
+        
+        i_test = 'fisherz'
+        
+    else:
+        raise ValueError('Not supported dataset!')
     
     cg = pc(data=train.to_numpy(), 
             alpha=0.05, 
-            indep_test='chisq') 
+            indep_test=i_test) 
     print(cg.G)
     trainG = cg.G.graph
     
     # visualization
     pdy = GraphUtils.to_pydot(cg.G, labels=df.columns)
-    pdy.write_png('./assets/loan/dag_train_loan.png')
-    fig = Image.open('./assets/loan/dag_train_loan.png')
+    pdy.write_png('./assets/{}/dag_train_{}.png'.format(config["dataset"], config["dataset"]))
+    fig = Image.open('./assets/{}/dag_train_{}.png'.format(config["dataset"], config["dataset"]))
     wandb.log({'Baseline DAG (Train)': wandb.Image(fig)})
     #%%
     """train dataset representation"""
@@ -136,7 +174,7 @@ def main():
     train_recon = transformer.inverse_transform(train_recon, model.sigma.detach().cpu().numpy())
     #%%
     """PC algorithm : train dataset representation"""
-    train_recon = (train_recon - train_recon.mean(axis=0)) / train_recon.std(axis=0)
+    train_recon = train_recon[df.columns]
     cg = pc(data=train_recon.to_numpy(), 
             alpha=0.05, 
             indep_test='fisherz') 
@@ -148,12 +186,13 @@ def main():
     flag = np.triu(trainG)[nonzero_idx] == np.triu(cg.G.graph)[nonzero_idx]
     nonzero_idx = (nonzero_idx[1][flag], nonzero_idx[0][flag])
     trainSHD += (np.tril(trainG)[nonzero_idx] != np.tril(cg.G.graph)[nonzero_idx]).sum()
+    print('SHD (Train): {}'.format(trainSHD))
     wandb.log({'SHD (Train)': trainSHD})
     
     # visualization
     pdy = GraphUtils.to_pydot(cg.G, labels=train_recon.columns)
-    pdy.write_png('./assets/loan/dag_recon_train_loan.png')
-    fig = Image.open('./assets/loan/dag_recon_train_loan.png')
+    pdy.write_png('./assets/{}/dag_recon_train_{}.png'.format(config["dataset"], config["dataset"]))
+    fig = Image.open('./assets/{}/dag_recon_train_{}.png'.format(config["dataset"], config["dataset"]))
     wandb.log({'Reconstructed DAG (Train)': wandb.Image(fig)})
     #%%
     """synthetic dataset"""
@@ -173,7 +212,7 @@ def main():
     sample_df = transformer.inverse_transform(data, model.sigma.detach().cpu().numpy())
     #%%
     """PC algorithm : synthetic dataset"""
-    sample_df = (sample_df - sample_df.mean(axis=0)) / sample_df.std(axis=0)
+    sample_df = sample_df[df.columns]
     cg = pc(data=sample_df.to_numpy(), 
             alpha=0.05, 
             indep_test='fisherz') 
@@ -185,34 +224,97 @@ def main():
     flag = np.triu(trainG)[nonzero_idx] == np.triu(cg.G.graph)[nonzero_idx]
     nonzero_idx = (nonzero_idx[1][flag], nonzero_idx[0][flag])
     sampleSHD += (np.tril(trainG)[nonzero_idx] != np.tril(cg.G.graph)[nonzero_idx]).sum()
+    print('SHD (Sample): {}'.format(sampleSHD))
     wandb.log({'SHD (Sample)': sampleSHD})
     
     # visualization
     pdy = GraphUtils.to_pydot(cg.G, labels=sample_df.columns)
-    pdy.write_png('./assets/loan/dag_recon_sample_loan.png')
-    fig = Image.open('./assets/loan/dag_recon_sample_loan.png')
+    pdy.write_png('./assets/{}/dag_recon_sample_{}.png'.format(config["dataset"], config["dataset"]))
+    fig = Image.open('./assets/{}/dag_recon_sample_{}.png'.format(config["dataset"], config["dataset"]))
     wandb.log({'Reconstructed DAG (Sampled)': wandb.Image(fig)})
     #%%
     """Machine Learning Efficacy"""
-    import statsmodels.api as sm
     
     # Baseline
-    covariates = [x for x in train.columns if x != 'CCAvg']
-    linreg = sm.OLS(train['CCAvg'], train[covariates]).fit()
-    linreg.summary()
-    pred = linreg.predict(test[covariates])
-    rsq_baseline = 1 - (test['CCAvg'] - pred).pow(2).sum() / np.var(test['CCAvg']) / len(test)
-    print("Baseline R-squared: {:.2f}".format(rsq_baseline))
-    wandb.log({'R^2 (Baseline)': rsq_baseline})
+    if config["dataset"] == 'loan':
+        covariates = [x for x in train.columns if x != 'CCAvg']
+        linreg = sm.OLS(train['CCAvg'], train[covariates]).fit()
+        pred = linreg.predict(test[covariates])
+        rsq_baseline = 1 - (test['CCAvg'] - pred).pow(2).sum() / np.var(test['CCAvg']) / len(test)
+        
+        print("Baseline R-squared: {:.2f}".format(rsq_baseline))
+        wandb.log({'R^2 (Baseline)': rsq_baseline})
+        
+    elif config["dataset"] == 'adult':
+        covariates = [x for x in train.columns if x != 'income']
+        
+        clf = RandomForestClassifier(random_state=0)
+        clf.fit(train[covariates], train['income'])
+        pred = clf.predict(test[covariates])
+        # logistic = sm.Logit(train['income'], train[covariates]).fit()
+        # pred = logistic.predict(test[covariates])
+        pred = (pred > 0.5).astype(float)
+        f1_baseline = f1_score(test['income'], pred)
+        
+        print("Baseline F1: {:.2f}".format(f1_baseline))
+        wandb.log({'F1 (Baseline)': f1_baseline})
+    
+    elif config["dataset"] == 'covtype':
+        covariates = [x for x in train.columns if x != 'Cover_Type']
+        
+        clf = RandomForestClassifier(random_state=0)
+        clf.fit(train[covariates], train['Cover_Type'])
+        pred = clf.predict(test[covariates])
+        f1_baseline = f1_score(test['Cover_Type'].to_numpy(), pred, average='micro')
+        # acc_baseline = clf.score(test[covariates], test['Cover_Type'])
+        
+        print("Baseline F1: {:.2f}".format(f1_baseline))
+        wandb.log({'F1 (Baseline)': f1_baseline})
+    
+    else:
+        raise ValueError('Not supported dataset!')
     #%%
-    # Train
-    covariates = [x for x in sample_df.columns if x != 'CCAvg']
-    linreg = sm.OLS(sample_df['CCAvg'], sample_df[covariates]).fit()
-    linreg.summary()
-    pred = linreg.predict(test[covariates])
-    rsq = 1 - (test['CCAvg'] - pred).pow(2).sum() / np.var(test['CCAvg']) / len(test)
-    print("TVAE R-squared: {:.2f}".format(rsq))
-    wandb.log({'R^2 (Sample)': rsq})
+    # synthetic
+    if config["dataset"] == 'loan':
+        covariates = [x for x in sample_df.columns if x != 'CCAvg']
+        sample_df[covariates] = (sample_df[covariates] - sample_df[covariates].mean(axis=0)) / sample_df[covariates].std(axis=0)
+        
+        covariates = [x for x in sample_df.columns if x != 'CCAvg']
+        linreg = sm.OLS(sample_df['CCAvg'], sample_df[covariates]).fit()
+        pred = linreg.predict(test[covariates])
+        rsq = 1 - (test['CCAvg'] - pred).pow(2).sum() / np.var(test['CCAvg']) / len(test)
+        
+        print("{} R-squared: {:.2f}".format(config["dataset"], rsq))
+        wandb.log({'R^2 (Sample)': rsq})
+        
+    elif config["dataset"] == 'adult':
+        covariates = [x for x in sample_df.columns if x != 'income']
+        
+        clf = RandomForestClassifier(random_state=0)
+        clf.fit(sample_df[covariates], sample_df['income'])
+        pred = clf.predict(test[covariates])
+        # logistic = sm.Logit(sample_df['income'], sample_df[covariates]).fit()
+        # pred = logistic.predict(test[covariates])
+        pred = (pred > 0.5).astype(float)
+        f1 = f1_score(test['income'], pred)
+        
+        print("{} F1: {:.2f}".format(config["dataset"], f1))
+        wandb.log({'F1 (Sample)': f1})
+    
+    elif config["dataset"] == 'covtype':
+        covariates = [x for x in train.columns if x != 'Cover_Type']
+        
+        clf = RandomForestClassifier(random_state=0)
+        clf.fit(sample_df[covariates], sample_df['Cover_Type'])
+        pred = clf.predict(test[covariates])
+        f1 = f1_score(test['Cover_Type'].to_numpy(), pred, average='micro')
+        # acc = clf.score(test[covariates], test['Cover_Type'])
+        
+        print("{} F1: {:.2f}".format(config["dataset"], f1))
+        wandb.log({'F1 (Sample)': f1})
+    
+    else:
+        raise ValueError('Not supported dataset!')
     #%%
     wandb.run.finish()
 #%%
