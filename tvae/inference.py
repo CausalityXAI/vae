@@ -59,8 +59,8 @@ def main():
     #%%
     config = vars(get_args(debug=False)) # default configuration
     
-    dataset = 'loan'
-    # dataset = 'adult'
+    # dataset = 'loan'
+    dataset = 'adult'
     # dataset = 'covtype'
     
     """model load"""
@@ -125,11 +125,9 @@ def main():
         df = df.sample(frac=1, random_state=1).reset_index(drop=True)
         df = df[(df == '?').sum(axis=1) == 0]
         df['income'] = df['income'].map({'<=50K': 0, '>50K': 1, '<=50K.': 0, '>50K.': 1})
-        df = df[dataset.continuous]
+        continuous = ['income', 'educational-num', 'capital-gain', 'capital-loss', 'hours-per-week']
+        df = df[continuous]
         
-        # scaling = [x for x in dataset.continuous if x != 'income']
-        # df_ = df.copy()
-        # df_[scaling] = (df[scaling] - df[scaling].mean(axis=0)) / df[scaling].std(axis=0)
         train = df.iloc[:40000]
         test = df.iloc[40000:]
         
@@ -138,7 +136,16 @@ def main():
     elif config["dataset"] == 'covtype':
         df = pd.read_csv('./data/covtype.csv')
         df = df.sample(frac=1, random_state=5).reset_index(drop=True)
-        df = df[dataset.continuous]
+        continuous = [
+            'Horizontal_Distance_To_Hydrology', 
+            'Vertical_Distance_To_Hydrology',
+            'Horizontal_Distance_To_Roadways',
+            'Horizontal_Distance_To_Fire_Points',
+            'Elevation', 
+            'Aspect', 
+            'Slope', 
+            'Cover_Type']
+        df = df[continuous]
         df = df.dropna(axis=0)
         
         train = df.iloc[2000:, ]
